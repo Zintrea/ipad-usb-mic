@@ -21,6 +21,9 @@ targets:
       properties:
         CFBundleDisplayName: iPad Mic
         UILaunchScreen: {}
+        NSMicrophoneUsageDescription: "Used to send your voice to the computer over USB."
+        NSLocalNetworkUsageDescription: "Accepts the connection from the computer over USB."
+        UIBackgroundModes: [audio]
         UISupportedInterfaceOrientations~ipad:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown

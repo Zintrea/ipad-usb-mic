@@ -17,3 +17,8 @@
   - **ปัญหาที่เจอ:** (1) `project.yml` ในแผนมีบรรทัด `UIL` ถูกตัดค้าง (2) โค้ดส่วน timer/สร้างเสียงใน SineServer ในแผนถูกตัด (3) `py -3.11` ไม่มีในเครื่อง (มีแต่ Python 3.12.10)
   - **วิธีแก้:** (1) ใช้ `UILaunchScreen: {}` (2) เขียนเองตามโปรโตคอล: timer 10 ms, phase ต่อเนื่อง, amplitude 0.5 (3) ตรวจ syntax ด้วย `py -3` แทน; แผน 4 ต้องติดตั้ง Python 3.11 ก่อน
 - ยังไม่ได้ตรวจ: CI ยังไม่ได้รัน, ยังไม่ได้ติดตั้ง `pymobiledevice3` จึงยังไม่ได้ตรวจ signature ของ `select_device` / `MuxDevice.connect` (ต้องตรวจในแผน 4 แล้วแก้ตามจริง), ยังไม่ได้ทดสอบกับ iPad
+- เติม Info.plist keys ที่ขาด (ดู [GUIDE บทที่ 1](docs/GUIDE.md))
+  - **ทำอะไร:** เติม `NSMicrophoneUsageDescription`, `NSLocalNetworkUsageDescription`, `UIBackgroundModes` ใน `ios/project.yml`
+  - **ทำไม:** ข้อความแผนถูกตัดตอนวาง ทำให้ key หาย
+  - **ปัญหาที่ป้องกัน:** แอป crash ตอนขอใช้ไมค์ / iOS อาจบล็อกการต่อจากคอม / เสียงหยุดตอนล็อกจอ
+  - **บทเรียน:** เก็บแผนเป็นไฟล์ใน repo (`docs/plans/`) แทนการวางข้อความ
