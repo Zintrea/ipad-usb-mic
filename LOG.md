@@ -22,3 +22,8 @@
   - **ทำไม:** ข้อความแผนถูกตัดตอนวาง ทำให้ key หาย
   - **ปัญหาที่ป้องกัน:** แอป crash ตอนขอใช้ไมค์ / iOS อาจบล็อกการต่อจากคอม / เสียงหยุดตอนล็อกจอ
   - **บทเรียน:** เก็บแผนเป็นไฟล์ใน repo (`docs/plans/`) แทนการวางข้อความ
+- ผลแผน 4 และ 5 (ดู [GUIDE บทที่ 1](docs/GUIDE.md))
+  - **ทำอะไร:** สร้าง `windows/.venv` (Python 3.11.15), ติดตั้ง requirements (pymobiledevice3 11.33.0, sounddevice 0.5.6, numpy 2.4.6), push `dev`, รัน CI
+  - **ผลตรวจ:** signature ตรงกับโค้ด: `select_device(udid=None, connection_type=None, usbmux_address=None)` และ `MuxDevice.connect(self, port, usbmux_address=None) -> socket`; `--list-devices` เจอ `CABLE Input (VB-Audio Virtual Cable)` บน WASAPI 48000 Hz
+  - **CI:** run 38947126453 ผ่าน (48 วินาที) ได้ `IpadMic.ipa` ขนาด 25010 byte มี warning เรื่อง Node.js 20 deprecated ของ actions/checkout@v4 และ upload-artifact@v4 (ยังไม่กระทบ)
+  - **ยังไม่ได้ตรวจ:** ติดตั้งลง iPad, การต่อผ่าน usbmux จริง, WAV 440 Hz
