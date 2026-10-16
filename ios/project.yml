@@ -1,0 +1,28 @@
+name: IpadMic
+options:
+  bundleIdPrefix: com.zintrea
+  deploymentTarget:
+    iOS: "17.0"
+targets:
+  IpadMic:
+    type: application
+    platform: iOS
+    sources: [IpadMic]
+    scheme: {}                     # จำเป็น: ไม่มีบรรทัดนี้ xcodebuild จะหา scheme ไม่เจอ
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.zintrea.ipadmic
+        TARGETED_DEVICE_FAMILY: "2"   # iPad เท่านั้น
+        SWIFT_VERSION: "5.0"
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+    info:
+      path: IpadMic/Info.plist
+      properties:
+        CFBundleDisplayName: iPad Mic
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight

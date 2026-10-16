@@ -1,0 +1,36 @@
+name: build-ios
+on:
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      # ดึงโค้ดจาก repo มาไว้บนเครื่อง runner ไม่งั้นไม่มีอะไรให้ build
+      - uses: actions/checkout@v4
+      # XcodeGen สร้างไฟล์ .xcodeproj จาก project.yml เพราะเราไม่มี Mac ไว้เปิด Xcode เอง
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      # สร้าง ios/IpadMic.xcodeproj และ Info.plist ใหม่ทุกครั้ง (สองไฟล์นี้ไม่เก็บใน git)
+      - name: Generate Xcode project
+        run: cd ios && xcodegen generate
+      # archive แบบไม่เซ็นชื่อ เพราะไม่มีใบรับรอง Apple Developer
+      # Sideloadly จะเซ็นด้วย Apple ID ฟรีให้ตอนติดตั้งเอง
+      - name: Build (unsigned)
+        run: |
+          xcodebuild -project ios/IpadMic.xcodeproj -scheme IpadMic \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -archivePath build/IpadMic.xcarchive archive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+      # .ipa คือไฟล์ zip ที่มีโฟลเดอร์ Payload/*.app ข้างใน Sideloadly ต้องการรูปแบบนี้
+      - name: Package .ipa
+        run: |
+          mkdir -p build/Payload
+          cp -R build/IpadMic.xcarchive/Products/Applications/IpadMic.app build/Payload/
+          cd build && zip -qr IpadMic.ipa Payload
+      # เก็บ .ipa เป็น artifact ให้ดาวน์โหลดจากหน้า Actions ใน GitHub
+      - uses: actions/upload-artifact@v4
+        with:
+          name: IpadMic-ipa
+          path: build/IpadMic.ipa

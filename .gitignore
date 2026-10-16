@@ -19,3 +19,6 @@ ios/*.xcodeproj/
 # OS
 .DS_Store
 Thumbs.db
+
+# XcodeGen สร้างให้ใหม่ทุกครั้ง
+ios/IpadMic/Info.plist
