@@ -162,6 +162,17 @@ def pick_monitor(apis, devices):
     return None
 
 
+def is_bluetooth(devices, idx):
+    """หูฟังบลูทูธมีอุปกรณ์ Hands-Free จาก bthhfenum.sys ที่ชื่อรุ่นเดียวกันอยู่ในรายการ
+    shortcut: เทียบจากชื่อรุ่นในวงเล็บสุดท้าย รุ่นที่ไม่มีอุปกรณ์ Hands-Free จะตรวจไม่เจอ"""
+    name = devices[idx]["name"]
+    if "bluetooth" in name.lower():
+        return True
+    product = name[name.rfind("(") + 1:].rstrip(")").lower() if "(" in name else ""
+    return bool(product) and any("bthhfenum" in d["name"].lower() and product in d["name"].lower()
+                                 for d in devices)
+
+
 class Monitor:
     """เสียงที่ส่งไปหูฟัง: ใช้ Jitter แยก เพราะนาฬิกาของหูฟังกับ CABLE ไม่ตรงกัน"""
 
@@ -308,10 +319,13 @@ def take_over():
 
 def open_monitor(sd):
     """เปิดหูฟังไว้เล่นเงียบรอ (กดปุ่มในแอปแล้วได้ยินทันที) เปิดไม่ได้ = ไม่มีฟังเสียงตัวเอง แต่ CABLE ยังทำงาน"""
-    idx = pick_monitor(sd.query_hostapis(), sd.query_devices())
+    devices = sd.query_devices()
+    idx = pick_monitor(sd.query_hostapis(), devices)
     if idx is None:
         log("ไม่พบหูฟัง/ลำโพงหลักที่ไม่ใช่ CABLE ปุ่มฟังเสียงตัวเองจะไม่มีเสียง")
         return None, None
+    if is_bluetooth(devices, idx):
+        log("เตือน: หูฟังนี้เป็นบลูทูธ ดีเลย์ 100+ ms ฟังเสียงตัวเองจะช้าและเหมือนมีเสียงสะท้อน ใช้หูฟังสายจะเรียลไทม์กว่า")
     mon = Monitor()
 
     def cb(outdata, frames, t, status):
