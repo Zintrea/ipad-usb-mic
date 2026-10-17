@@ -3,6 +3,8 @@ import SwiftUI
 struct ContentView: View {
     @ObservedObject var server: MicServer
     @AppStorage("rawMode") private var raw = false   // จำค่าข้ามการเปิดแอป
+    @AppStorage("gainDB") private var gainDB = 0.0
+    @AppStorage("muted") private var muted = false
 
     // ใช้สีของระบบทั้งหมด เพื่อให้โหมดมืด/สว่างทำงานเอง
     private var dotColor: Color {
@@ -18,8 +20,8 @@ struct ContentView: View {
     private var statusText: String {
         switch server.state {
         case .stopped: return "หยุดอยู่"
-        case .waiting: return "รอคอมต่อ..."
-        case .streaming: return "กำลังส่งเสียง"
+        case .waiting: return muted ? "รอคอมต่อ... (ปิดไมค์)" : "รอคอมต่อ..."
+        case .streaming: return muted ? "ปิดไมค์ (ส่งเสียงเงียบ)" : "กำลังส่งเสียง"
         case .interrupted: return "Interrupted – กด Start ใหม่"
         case .error(let message): return message
         }
@@ -55,6 +57,22 @@ struct ContentView: View {
             }
             .frame(maxWidth: 360, minHeight: 24, maxHeight: 24)
 
+            VStack(spacing: 8) {
+                Text(String(format: "ความดัง %+.0f dB", gainDB))
+                Slider(value: $gainDB, in: -24...12, step: 1)
+            }
+            .frame(maxWidth: 360)
+
+            Button {
+                muted.toggle()
+            } label: {
+                Label(muted ? "เปิดไมค์" : "ปิดไมค์", systemImage: muted ? "mic.slash.fill" : "mic.fill")
+                    .font(.title2)
+                    .frame(maxWidth: 360, minHeight: 56)
+            }
+            .buttonStyle(.bordered)
+            .tint(muted ? .orange : .green)
+
             // เปลี่ยนโหมดได้ตอนหยุดเท่านั้น เพราะต้องตั้ง AVAudioSession ใหม่
             Picker("โหมดเสียง", selection: $raw) {
                 Text("มาตรฐาน (แนะนำ)").tag(false)
@@ -79,5 +97,8 @@ struct ContentView: View {
                 .foregroundStyle(.secondary)
         }
         .padding()
+        .onAppear { server.setGain(db: gainDB); server.setMuted(muted) }
+        .onChange(of: gainDB) { server.setGain(db: gainDB) }
+        .onChange(of: muted) { server.setMuted(muted) }
     }
 }

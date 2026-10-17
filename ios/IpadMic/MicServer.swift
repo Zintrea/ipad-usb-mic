@@ -23,6 +23,12 @@ final class MicServer: ObservableObject {
     private let engine = AVAudioEngine()
     private var sink: AVAudioSinkNode?
 
+    // เขียนจาก main อ่านจากเธรดเสียง (ค่าเดียว ไม่ต้องล็อก)
+    private var gain: Float = 1
+    private var muted = false
+    func setGain(db: Double) { gain = Float(pow(10, db / 20)) }
+    func setMuted(_ m: Bool) { muted = m }
+
     private var listener: NWListener?
     private var connection: NWConnection?
     private var ready = false      // header ส่งแล้ว ส่ง PCM ได้
@@ -162,8 +168,17 @@ final class MicServer: ObservableObject {
 
     private func handle(_ ch: UnsafePointer<Float>, _ n: Int) {
         guard n > 0 else { return }
+        // ปิดไมค์ = ส่งเสียงเงียบ (ไม่ตัดสาย) ตัวรับไม่ต้องต่อใหม่ DAW ไม่สะดุด
+        let g = muted ? 0 : gain
+        var out = [Float](repeating: 0, count: n)
         var peak: Float = 0
-        for i in 0..<n { peak = max(peak, abs(ch[i])) }
+        if g > 0 {
+            for i in 0..<n {
+                let v = max(-1, min(1, ch[i] * g))   // clip ที่ ±1 เหมือนที่ตัวรับจะได้
+                out[i] = v
+                peak = max(peak, abs(v))
+            }
+        }
         uiPeak = max(uiPeak, peak)
         uiChunk = max(uiChunk, Double(n) / sampleRate * 1000)
         let now = ProcessInfo.processInfo.systemUptime
@@ -173,7 +188,7 @@ final class MicServer: ObservableObject {
             uiPeak = 0; uiChunk = 0
             DispatchQueue.main.async { self.level = p; self.chunkMs = c }
         }
-        let data = Data(bytes: ch, count: n * MemoryLayout<Float>.size)
+        let data = out.withUnsafeBufferPointer { Data(buffer: $0) }
         queue.async { self.send(data) }
     }
 
