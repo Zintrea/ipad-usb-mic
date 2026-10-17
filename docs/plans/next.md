@@ -15,6 +15,7 @@ Repo: `C:\Host\02 Projects\13 Ipadmic`, branch `dev` · กฎการทำง
 - ลำดับ: `feat/iphone` → `feat/limiter` (+ ไฟแดงค้าง 2 วินาที, สร้างหน้าตั้งค่า) → `feat/eq-reverb` → `feat/noise-profile` → `feat/pc-monitor`
 - `feat/noise-profile`: เรียนเสียงรอบข้าง 3 วินาที (ผู้ใช้อยู่นิ่ง) ลบแบบจำกัดความลึก เริ่ม ~10 dB; เสียงรบกวนจริงคือพัดลม แอร์ รถ ถนน (เสียงรถวิ่งผ่านลบไม่ได้)
 - `feat/pc-monitor`: ผู้ใช้เลือกทาง ข. = ปุ่มเปิด/ปิดฟังเสียงตัวเองในแอป ต้องเพิ่มช่องส่งคำสั่งจากแอปไปตัวรับ (ใช้ model opus ตอนเริ่ม)
+- `feat/limiter` เขียนแล้ว (ยังไม่ push/ไม่ได้ compile) ดู [LOG.md](../../LOG.md)
 - แผนแยกที่ยังไม่ทำ: push + CI, shortcut `start.bat` ใน Startup ของ Windows
 
 ## ค้างจากเกณฑ์เฟส 2 (SPEC)
