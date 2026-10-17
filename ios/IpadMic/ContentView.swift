@@ -12,7 +12,15 @@ struct ContentView: View {
     @AppStorage("presenceDB") private var presenceDB = 3.0
     @AppStorage("reverbPreset") private var reverbPreset = 0
     @AppStorage("reverbMix") private var reverbMix = 0.2
+    @AppStorage("noiseOn") private var noiseOn = true
+    @AppStorage("noiseDepthDB") private var noiseDepthDB = 10.0
     @State private var showSettings = false
+
+    private var noiseHint: String {
+        if server.noiseLearning { return "กำลังเรียนเสียงรอบข้าง อยู่นิ่ง ๆ 3 วินาที..." }
+        if !server.hasNoiseProfile { return "ยังไม่ได้เรียนเสียง: กด START แล้วกดเรียนเสียงตอนเงียบ" }
+        return running ? " " : "กด START ก่อนจึงเรียนเสียงใหม่ได้"
+    }
 
     // ส่งค่าเสียงทั้งหมดให้ server (ค่าถูกจำใน AppStorage ทั้งหน้านี้และหน้าตั้งค่า)
     private func applyAudio() {
@@ -20,6 +28,7 @@ struct ContentView: View {
         server.setLimiter(on: limiterOn, ceilingDB: ceilingDB)
         server.setEQ(on: eqOn, lowCutHz: lowCutHz, presenceDB: presenceDB)
         server.setReverb(preset: reverbPreset, mix: reverbMix)
+        server.setNoise(on: noiseOn, depthDB: noiseDepthDB)
     }
 
     // ใช้สีของระบบทั้งหมด เพื่อให้โหมดมืด/สว่างทำงานเอง
@@ -97,6 +106,17 @@ struct ContentView: View {
             .pickerStyle(.segmented)
             .frame(maxWidth: 360)
 
+            VStack(spacing: 8) {
+                HStack {
+                    Toggle("ตัดเสียงรบกวน", isOn: $noiseOn)
+                    Button("เรียนเสียงรอบข้าง") { server.learnNoise() }
+                        .buttonStyle(.bordered)
+                        .disabled(!running || server.noiseLearning)
+                }
+                Text(noiseHint).font(.footnote).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: 360)
+
             Button {
                 muted.toggle()
             } label: {
@@ -133,5 +153,7 @@ struct ContentView: View {
         .onChange(of: presenceDB) { applyAudio() }
         .onChange(of: reverbPreset) { applyAudio() }
         .onChange(of: reverbMix) { applyAudio() }
+        .onChange(of: noiseOn) { applyAudio() }
+        .onChange(of: noiseDepthDB) { applyAudio() }
     }
 }

@@ -37,6 +37,19 @@ final class MicServer: ObservableObject {
     }
     private var clipHoldUntil = 0.0   // ใช้ในเธรดเสียงเท่านั้น
 
+    private let noise = NoiseReducer()
+    @Published private(set) var noiseLearning = false
+    @Published private(set) var hasNoiseProfile = false
+    func setNoise(on: Bool, depthDB: Double) {
+        noise.enabled = on
+        noise.floor = Float(pow(10, -depthDB / 20))
+    }
+    /// ต้องกด Start ก่อน (ต้องมีเสียงจากไมค์) ผลจำไว้ใน UserDefaults
+    func learnNoise() {
+        noise.learn()
+        noiseLearning = true
+    }
+
     private let lowCut = Biquad()
     private let presence = Biquad()
     private let reverb = Reverb()
@@ -62,6 +75,17 @@ final class MicServer: ObservableObject {
     private var uiChunk = 0.0
 
     init() {
+        if let saved = UserDefaults.standard.array(forKey: "noiseProfile") as? [Float] {
+            noise.setProfile(saved)
+            hasNoiseProfile = noise.hasProfile
+        }
+        noise.onLearned = { [weak self] p in
+            DispatchQueue.main.async {
+                UserDefaults.standard.set(p, forKey: "noiseProfile")
+                self?.noiseLearning = false
+                self?.hasNoiseProfile = true
+            }
+        }
         let nc = NotificationCenter.default
         nc.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: nil) { [weak self] note in
             let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
@@ -183,7 +207,8 @@ final class MicServer: ObservableObject {
             sink = nil
         }
         try? AVAudioSession.sharedInstance().setActive(false)
-        DispatchQueue.main.async { self.level = 0; self.clipping = false }
+        noise.cancelLearn()   // engine หยุดแล้ว เธรดเสียงไม่แตะข้อมูลนี้
+        DispatchQueue.main.async { self.level = 0; self.clipping = false; self.noiseLearning = false }
     }
 
     // MARK: - เสียงจากไมค์ (เรียกจากเธรดเสียง ห้ามบล็อก)
@@ -195,10 +220,10 @@ final class MicServer: ObservableObject {
         var out = [Float](repeating: 0, count: n)
         var peak: Float = 0
         var clipped = false
-        // ลำดับ: gain → EQ → reverb → limiter (ดู docs/plans/phase4.md)
+        // ลำดับ: ตัดเสียงรบกวน → gain → EQ → reverb → limiter (ดู docs/plans/phase4.md)
         // ป้อน limiter ทุก sample แม้ปิดไมค์ เพื่อให้ดีเลย์คงที่ ตัด ±1 ซ้ำเป็นตัวกันสุดท้าย
         for i in 0..<n {
-            var x = reverb.process(presence.process(lowCut.process(ch[i] * g)))
+            var x = reverb.process(presence.process(lowCut.process(noise.process(ch[i]) * g)))
             if m { x = 0 }                    // ปิดหลัง reverb ให้เงียบทันที ไม่มีหางเสียงค้าง
             if abs(x) > 1 { clipped = true }
             let v = max(-1, min(1, limiter.process(x)))
