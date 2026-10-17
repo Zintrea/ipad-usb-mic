@@ -4,6 +4,7 @@
 ตามด้วย Float32 mono ต่อเนื่อง ดู docs/GUIDE.md
 """
 import argparse
+import asyncio
 import datetime
 import struct
 import sys
@@ -135,11 +136,17 @@ def run(args):
 
     # 2) ต่อ iPad ผ่าน usbmux (import ตรงนี้ เพื่อให้ --check/--list-devices ไม่ต้องติดตั้ง pymobiledevice3)
     from pymobiledevice3.usbmux import select_device
-    dev = select_device()
-    if dev is None:
+
+    # pymobiledevice3 11.x: select_device / connect เป็น async
+    async def connect():
+        dev = await select_device()
+        return None if dev is None else await dev.connect(args.port)
+
+    sock = asyncio.run(connect())
+    if sock is None:
         print("ไม่พบ iPad — เสียบสาย/ปลดล็อก/กด Trust")
         return 1
-    sock = dev.connect(args.port)
+    sock.setblocking(True)  # socket จาก asyncio เป็น non-blocking แต่ loop ด้านล่างอ่านแบบ blocking
 
     wav = None
     stream = None

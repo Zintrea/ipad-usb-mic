@@ -32,3 +32,10 @@
   - **ทำไม:** Sideloadly และ iloader ล็อกอิน Apple ไม่ผ่าน (grandslam 503, anisette 502, -45025) นานกว่า 12 ชั่วโมง เพราะ Apple บล็อกตัวระบุ Xcode
   - **แก้เอกสาร:** GUIDE ข้อ 5.3 และ 8, `docs/plans/phase1-next.md`, คอมเมนต์ `build.yml`
   - **ยังไม่ได้ตรวจ:** การต่อผ่าน usbmux จริง, WAV 440 Hz; การที่ไม่พบ service "Apple Mobile Device" ยังไม่ได้แก้ แต่ AltServer เห็น iPad แล้ว
+- เฟส 1 ผ่าน: iPad → usbmux → Python ได้ WAV 440 Hz (GUIDE ข้อ 5.5-5.6)
+  - **ปัญหาที่เจอ:** (1) `AttributeError: 'coroutine' object has no attribute 'connect'` (2) `BlockingIOError: [WinError 10035]` ตอนอ่าน header
+  - **สาเหตุ:** (1) pymobiledevice3 11.33.0 ทำ `select_device` / `MuxDevice.connect` เป็น async (ตอนตรวจ signature ครั้งก่อนดูแค่ชื่อพารามิเตอร์) (2) socket ที่ได้กลับมาเป็น non-blocking
+  - **วิธีแก้:** `spike_receiver.py` เรียกผ่าน `asyncio.run()` แล้ว `sock.setblocking(True)`
+  - **ผลตรวจ:** `header ถูกต้อง (IPMC v1, mono, 48000 Hz, Float32)`, สะดุด 0 / ล้น 0 ครั้ง (โหมด `--no-play`), WAV 21.39 วินาที (1026720 frame), `--check` ได้ `พบความถี่หลัก 440.0 Hz` / `ผ่าน`
+  - **แก้เอกสาร:** SPEC.md เปลี่ยน Sideloadly เป็น AltServer, หมายเหตุใน GUIDE ข้อ 5
+  - **ยังไม่ได้ตรวจ:** การเล่นออก VB-Cable (ไม่ใส่ `--no-play`), WAV จาก CABLE Output, `bindLoopbackOnly` แบบ loopback (ตอนนี้ค่าเริ่มต้นใช้ได้)
