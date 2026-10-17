@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @ObservedObject var server: SineServer
+    @ObservedObject var server: MicServer
 
     // ใช้สีของระบบทั้งหมด เพื่อให้โหมดมืด/สว่างทำงานเอง
     private var dotColor: Color {
@@ -9,6 +9,8 @@ struct ContentView: View {
         case .stopped: return .gray
         case .waiting: return .yellow
         case .streaming: return .green
+        case .interrupted: return .orange
+        case .error: return .red
         }
     }
 
@@ -17,8 +19,21 @@ struct ContentView: View {
         case .stopped: return "หยุดอยู่"
         case .waiting: return "รอคอมต่อ..."
         case .streaming: return "กำลังส่งเสียง"
+        case .interrupted: return "Interrupted – กด Start ใหม่"
+        case .error(let message): return message
         }
     }
+
+    private var running: Bool {
+        server.state == .waiting || server.state == .streaming
+    }
+
+    // peak 0...1 แสดงเป็น dB (-60...0) แถบจะขยับเห็นชัดกว่าสเกลเส้นตรง; แดงเมื่อ >= -3 dBFS
+    private var levelFraction: CGFloat {
+        guard server.level > 0 else { return 0 }
+        return CGFloat(max(0, min(1, (20 * log10(server.level) + 60) / 60)))
+    }
+    private var levelColor: Color { server.level >= 0.708 ? .red : .green }
 
     var body: some View {
         VStack(spacing: 32) {
@@ -30,17 +45,26 @@ struct ContentView: View {
                 Text(statusText).font(.title2)
             }
 
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.quaternary)
+                    Capsule().fill(levelColor)
+                        .frame(width: geo.size.width * levelFraction)
+                }
+            }
+            .frame(maxWidth: 360, minHeight: 24, maxHeight: 24)
+
             Button {
-                if server.state == .stopped { server.start() } else { server.stop() }
+                if running { server.stop() } else { server.start() }
             } label: {
-                Text(server.state == .stopped ? "START" : "STOP")
+                Text(running ? "STOP" : "START")
                     .font(.system(size: 36, weight: .bold))
                     .frame(maxWidth: 360, minHeight: 100)
             }
             .buttonStyle(.borderedProminent)
-            .tint(server.state == .stopped ? .blue : .red)
+            .tint(running ? .red : .blue)
 
-            Text("โหมดทดสอบ: 440 Hz")
+            Text(running ? String(format: "ก้อนละ %.1f ms", server.chunkMs) : " ")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }

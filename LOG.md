@@ -47,3 +47,6 @@
   - **ผลตรวจ:** unittest 3 ข้อผ่าน (จำลอง 10 นาที ±100 ppm: สะดุด 0, buffer เฉลี่ย 31.5 ms, ppm เข้าที่ ~100; sine 1 kHz ไม่เพี้ยน ไม่มีคลิก), `--check` ได้ 440.0 Hz, รันโดยไม่เสียบ iPad เห็น `รอ iPad...` ทุก 1 วินาที
   - **ปัญหาที่เจอ:** log ภาษาไทย crash เมื่อ redirect stdout (cp1252) แก้ด้วย `sys.stdout.reconfigure(encoding="utf-8")`; ppm ในหน้าต่าง 1 นาทีแกว่งตามเฟสของก้อน (วัดได้ 66 แทน 100) ทั้งที่ยาว ๆ เข้าที่ 100 จึงให้ test เฉลี่ย 5 นาที
   - **ยังไม่ได้ตรวจ:** กับ iPad และ WASAPI จริง (ทำในแผน 2.4)
+- แผน 2.2 แอป iPad ใช้ไมค์จริง (ดู [docs/plans/phase2.md](docs/plans/phase2.md))
+  - **ทำอะไร:** เปลี่ยน `SineServer.swift` เป็น `MicServer.swift` (AVAudioEngine + tap channel 0, session `.record`/`.measurement` 48 kHz, ขอสิทธิ์ไมค์, interruption/route change → `Interrupted`, error ถ้าไม่ได้ 48 kHz), UI เพิ่มแถบระดับเสียง (แดงที่ -3 dBFS) และแสดงขนาดก้อนจริง
+  - **ยังไม่ได้ตรวจ:** ยังไม่ได้ compile (ไม่มี Mac ต้องรอ CI ในแผน 2.3), ขนาดก้อนจริงของ tap (ความเสี่ยง R1), พฤติกรรมตอนล็อกจอ
