@@ -13,6 +13,7 @@ final class MicServer: ObservableObject {
     @Published private(set) var state: State = .stopped
     @Published private(set) var level: Float = 0      // peak 0...1 ใน ~50 ms ล่าสุด
     @Published private(set) var chunkMs: Double = 0   // ก้อนใหญ่สุดที่ไมค์ส่งมาใน ~50 ms ล่าสุด
+    @Published private(set) var clipping = false      // true ค้าง 2 วินาทีหลังเสียงเกิน 0 dBFS ก่อน limiter
 
     // ทางเลือกสำรอง: ถ้า true จะ bind แค่ 127.0.0.1 (ใช้เมื่อ usbmux ต่อ port ไม่ได้)
     private let bindLoopbackOnly = false
@@ -28,6 +29,13 @@ final class MicServer: ObservableObject {
     private var muted = false
     func setGain(db: Double) { gain = Float(pow(10, db / 20)) }
     func setMuted(_ m: Bool) { muted = m }
+
+    private let limiter = Limiter()
+    func setLimiter(on: Bool, ceilingDB: Double) {
+        limiter.enabled = on
+        limiter.ceiling = Float(pow(10, ceilingDB / 20))
+    }
+    private var clipHoldUntil = 0.0   // ใช้ในเธรดเสียงเท่านั้น
 
     private var listener: NWListener?
     private var connection: NWConnection?
@@ -161,7 +169,7 @@ final class MicServer: ObservableObject {
             sink = nil
         }
         try? AVAudioSession.sharedInstance().setActive(false)
-        DispatchQueue.main.async { self.level = 0 }
+        DispatchQueue.main.async { self.level = 0; self.clipping = false }
     }
 
     // MARK: - เสียงจากไมค์ (เรียกจากเธรดเสียง ห้ามบล็อก)
@@ -172,21 +180,24 @@ final class MicServer: ObservableObject {
         let g = muted ? 0 : gain
         var out = [Float](repeating: 0, count: n)
         var peak: Float = 0
-        if g > 0 {
-            for i in 0..<n {
-                let v = max(-1, min(1, ch[i] * g))   // clip ที่ ±1 เหมือนที่ตัวรับจะได้
-                out[i] = v
-                peak = max(peak, abs(v))
-            }
+        var clipped = false
+        // ป้อน limiter ทุก sample แม้ปิดไมค์ เพื่อให้ดีเลย์คงที่ ตัด ±1 ซ้ำเป็นตัวกันสุดท้าย
+        for i in 0..<n {
+            let x = ch[i] * g
+            if abs(x) > 1 { clipped = true }
+            let v = max(-1, min(1, limiter.process(x)))
+            out[i] = v
+            peak = max(peak, abs(v))
         }
+        let now = ProcessInfo.processInfo.systemUptime
+        if clipped { clipHoldUntil = now + 2 }
         uiPeak = max(uiPeak, peak)
         uiChunk = max(uiChunk, Double(n) / sampleRate * 1000)
-        let now = ProcessInfo.processInfo.systemUptime
         if now - lastUI >= 0.05 {
             lastUI = now
-            let p = uiPeak, c = uiChunk
+            let p = uiPeak, c = uiChunk, clip = now < clipHoldUntil
             uiPeak = 0; uiChunk = 0
-            DispatchQueue.main.async { self.level = p; self.chunkMs = c }
+            DispatchQueue.main.async { self.level = p; self.chunkMs = c; self.clipping = clip }
         }
         let data = out.withUnsafeBufferPointer { Data(buffer: $0) }
         queue.async { self.send(data) }
