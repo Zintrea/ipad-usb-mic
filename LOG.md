@@ -39,3 +39,6 @@
   - **ผลตรวจ:** `header ถูกต้อง (IPMC v1, mono, 48000 Hz, Float32)`, สะดุด 0 / ล้น 0 ครั้ง (โหมด `--no-play`), WAV 21.39 วินาที (1026720 frame), `--check` ได้ `พบความถี่หลัก 440.0 Hz` / `ผ่าน`
   - **แก้เอกสาร:** SPEC.md เปลี่ยน Sideloadly เป็น AltServer, หมายเหตุใน GUIDE ข้อ 5
   - **ยังไม่ได้ตรวจ:** การเล่นออก VB-Cable (ไม่ใส่ `--no-play`), WAV จาก CABLE Output, `bindLoopbackOnly` แบบ loopback (ตอนนี้ค่าเริ่มต้นใช้ได้)
+- วางแผนเฟส 2 (ไมค์จริง) เป็นไฟล์ [docs/plans/phase2.md](docs/plans/phase2.md)
+  - **ทำอะไร:** แบ่งเป็นแผน 2.1 ตัวรับ Windows, 2.2 แอป iPad, 2.3 push + CI, 2.4 ทดสอบจริง T1-T4, 2.5 เอกสาร
+  - **ความเสี่ยงหลัก:** tap ของ AVAudioEngine อาจส่งก้อนใหญ่กว่า 20 ms จน buffer 30 ms สะดุด (วัดในแผน 2.4)
