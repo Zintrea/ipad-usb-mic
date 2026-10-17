@@ -55,19 +55,20 @@ final class MicServer: ObservableObject {
 
     // MARK: - start / stop
 
-    func start() {
+    /// raw = true: .measurement (ไม่มี auto gain/แต่งเสียง) ทดสอบจริงแล้วเบาและทึบ จึงไม่ใช่ค่าเริ่มต้น
+    func start(raw: Bool) {
         AVAudioApplication.requestRecordPermission { [weak self] granted in
             guard let self = self else { return }
             self.queue.async {
-                if granted { self.startOnQueue() } else { self.setState(.error("ไม่ได้รับอนุญาตใช้ไมค์")) }
+                if granted { self.startOnQueue(raw: raw) } else { self.setState(.error("ไม่ได้รับอนุญาตใช้ไมค์")) }
             }
         }
     }
 
-    private func startOnQueue() {
+    private func startOnQueue(raw: Bool) {
         guard listener == nil else { return }
         do {
-            try startEngine()
+            try startEngine(raw: raw)
             try startListener()
             setState(.waiting)
         } catch let e as MicError {
@@ -79,10 +80,10 @@ final class MicServer: ObservableObject {
         }
     }
 
-    /// AVAudioSession .record + .measurement (ไม่ประมวลผลเสียง) แล้วต่อ sink node จาก inputNode
-    private func startEngine() throws {
+    /// AVAudioSession .record (โหมดมาตรฐานหรือดิบ) แล้วต่อ sink node จาก inputNode
+    private func startEngine(raw: Bool) throws {
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.record, mode: .measurement)
+        try session.setCategory(.record, mode: raw ? .measurement : .default)
         try session.setPreferredSampleRate(sampleRate)
         try session.setPreferredIOBufferDuration(0.005)
         try session.setActive(true)

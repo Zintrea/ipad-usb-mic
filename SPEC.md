@@ -2,7 +2,7 @@
 
 ## เป้าหมาย
 iPad เป็นไมค์คุณภาพสูงสุดเท่าที่ไมค์ในตัวทำได้ ส่งให้ Windows ผ่าน USB-C
-หลักการ: ง่ายที่สุด แต่เสียงต้องไม่สะดุดและไม่ถูกประมวลผล
+หลักการ: ง่ายที่สุด (เสียบสาย → เปิดแอป → START), เสียงไม่สะดุด, latency ต่ำ
 - แอป iPad: Start/Stop + สถานะ + แถบระดับเสียง (ขึ้นสีแดงเมื่อใกล้ clip)
 - ต้องอัดต่อได้แม้ล็อกจอ
 - ใช้งาน: เสียบสาย → เปิดแอป → Start → เลือก "CABLE Output" ใน DAW
@@ -19,7 +19,7 @@ iPad เป็นไมค์คุณภาพสูงสุดเท่าท
 - ตรวจแล้วใน spike: AltServer ต้องใช้ iTunes + iCloud เวอร์ชันเว็บ (เวอร์ชัน Microsoft Store ใช้ไม่ได้)
 
 ## สถาปัตยกรรม
-iPad mic → AVAudioEngine (Float32 mono 48 kHz, mode .measurement = ไม่ประมวลผลเสียง)
+iPad mic → AVAudioEngine + AVAudioSinkNode (Float32 mono 48 kHz, mode .default ค่าเริ่มต้น / .measurement = โหมดดิบ)
 → TCP listener port 7777 (noDelay, ก้อนละประมาณ 10 ms)
 → usbmux (Apple Devices) → Python + pymobiledevice3
 → jitter buffer 30 ms + ชดเชย drift ด้วย np.interp
@@ -27,7 +27,8 @@ iPad mic → AVAudioEngine (Float32 mono 48 kHz, mode .measurement = ไม่�
 
 ## C1. แอป iPad (`ios/`)
 - SwiftUI, iPadOS 17+, ไม่มี dependency, ใช้ XcodeGen (`project.yml`)
-- AVAudioSession: .record + .measurement, preferredSampleRate 48000
+- AVAudioSession: .record + .default (ค่าเริ่มต้น มี auto gain) หรือ .measurement (โหมดดิบ เลือกในแอป), preferredSampleRate 48000
+  (เดิมบังคับ .measurement แต่ทดสอบจริง 2026-10-17 เสียงเบาและทึบ ดู LOG)
   ถ้าได้ rate อื่นให้แสดง error (ไม่ทำตัวแปลง)
 - ส่ง Float32 ตรงจาก inputNode tap แบบ mono
 - กด Start แล้ว engine รันตลอดจนกว่าจะกด Stop

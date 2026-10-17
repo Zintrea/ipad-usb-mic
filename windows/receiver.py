@@ -3,9 +3,11 @@
 โปรโตคอล: header 16 byte (little-endian) "IPMC"|ver u16|ch u16|rate u32|fmt u16|rsv u16
 ตามด้วย Float32 mono ต่อเนื่อง ดู docs/GUIDE.md
 """
+import _thread
 import argparse
 import asyncio
 import datetime
+import socket
 import struct
 import sys
 import threading
@@ -144,6 +146,7 @@ def recv_exact(sock, n):
 
 
 NO_DATA_S = 3.0  # เงียบเกินนี้ถือว่าสายหลุด/แอปหยุด
+CONTROL_PORT = 7778  # localhost เท่านั้น: ตัวรับตัวใหม่ใช้สั่งตัวเก่าให้ปิด
 
 
 def session(args, jb, wav):
@@ -204,12 +207,44 @@ def session(args, jb, wav):
                 log(f"buffer {jb.level_ms():.0f} ms | สะดุด {jb.underruns} | ล้น {jb.overflows}"
                     f" | drift {jb.ppm:+.0f} ppm | ก้อนใหญ่สุด {max_gap * 1000:.0f} ms")
                 max_gap = 0.0
+    except OSError as e:  # รวม ConnectionError ตอนอ่าน header และสายหลุดกลางทาง
+        log(f"การเชื่อมต่อหลุด ({e})")
+        return None
     finally:
         sock.close()
 
 
+def take_over():
+    """สั่งตัวรับตัวเก่า (ถ้ามี) ให้ปิด แล้วเปิดพอร์ตควบคุมรอให้ตัวถัดไปสั่งปิดเรา
+    แอป iPad รับคอมได้ทีละตัว ถ้าเปิดสองตัวจะแย่งกันต่อสลับไปมา"""
+    try:
+        socket.create_connection(("127.0.0.1", CONTROL_PORT), timeout=1).close()
+        log("ปิดตัวรับตัวเก่า")
+    except OSError:
+        pass
+    srv = socket.socket()
+    for _ in range(50):  # รอตัวเก่าปล่อยพอร์ต สูงสุด 5 วินาที
+        try:
+            srv.bind(("127.0.0.1", CONTROL_PORT))
+            break
+        except OSError:
+            time.sleep(0.1)
+    else:
+        raise SystemExit("ปิดตัวรับตัวเก่าไม่ได้ — ปิดหน้าต่างเก่าเองแล้วเปิดใหม่")
+    srv.listen(1)
+
+    def wait():
+        srv.accept()
+        log("มีตัวรับตัวใหม่เปิดขึ้น ปิดตัวนี้")
+        _thread.interrupt_main()  # ให้ main จบผ่าน KeyboardInterrupt ไฟล์ WAV จะปิดครบ
+
+    threading.Thread(target=wait, daemon=True).start()
+
+
 def run(args):
     import sounddevice as sd
+
+    take_over()
 
     idx = None
     if not args.no_play:

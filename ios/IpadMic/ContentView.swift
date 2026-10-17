@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var server: MicServer
+    @AppStorage("rawMode") private var raw = false   // จำค่าข้ามการเปิดแอป
 
     // ใช้สีของระบบทั้งหมด เพื่อให้โหมดมืด/สว่างทำงานเอง
     private var dotColor: Color {
@@ -54,8 +55,17 @@ struct ContentView: View {
             }
             .frame(maxWidth: 360, minHeight: 24, maxHeight: 24)
 
+            // เปลี่ยนโหมดได้ตอนหยุดเท่านั้น เพราะต้องตั้ง AVAudioSession ใหม่
+            Picker("โหมดเสียง", selection: $raw) {
+                Text("มาตรฐาน (แนะนำ)").tag(false)
+                Text("ดิบ").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 360)
+            .disabled(running)
+
             Button {
-                if running { server.stop() } else { server.start() }
+                if running { server.stop() } else { server.start(raw: raw) }
             } label: {
                 Text(running ? "STOP" : "START")
                     .font(.system(size: 36, weight: .bold))
