@@ -37,6 +37,20 @@ final class MicServer: ObservableObject {
     }
     private var clipHoldUntil = 0.0   // ใช้ในเธรดเสียงเท่านั้น
 
+    private let lowCut = Biquad()
+    private let presence = Biquad()
+    private let reverb = Reverb()
+    func setEQ(on: Bool, lowCutHz: Double, presenceDB: Double) {
+        lowCut.setHighPass(freq: lowCutHz)
+        presence.setPeaking(freq: 4000, gainDB: presenceDB)
+        lowCut.enabled = on
+        presence.enabled = on
+    }
+    func setReverb(preset: Int, mix: Double) {
+        reverb.mix = Float(mix)
+        reverb.preset = Reverb.Preset(rawValue: preset) ?? .off
+    }
+
     private var listener: NWListener?
     private var connection: NWConnection?
     private var ready = false      // header ส่งแล้ว ส่ง PCM ได้
@@ -177,13 +191,15 @@ final class MicServer: ObservableObject {
     private func handle(_ ch: UnsafePointer<Float>, _ n: Int) {
         guard n > 0 else { return }
         // ปิดไมค์ = ส่งเสียงเงียบ (ไม่ตัดสาย) ตัวรับไม่ต้องต่อใหม่ DAW ไม่สะดุด
-        let g = muted ? 0 : gain
+        let g = gain, m = muted
         var out = [Float](repeating: 0, count: n)
         var peak: Float = 0
         var clipped = false
+        // ลำดับ: gain → EQ → reverb → limiter (ดู docs/plans/phase4.md)
         // ป้อน limiter ทุก sample แม้ปิดไมค์ เพื่อให้ดีเลย์คงที่ ตัด ±1 ซ้ำเป็นตัวกันสุดท้าย
         for i in 0..<n {
-            let x = ch[i] * g
+            var x = reverb.process(presence.process(lowCut.process(ch[i] * g)))
+            if m { x = 0 }                    // ปิดหลัง reverb ให้เงียบทันที ไม่มีหางเสียงค้าง
             if abs(x) > 1 { clipped = true }
             let v = max(-1, min(1, limiter.process(x)))
             out[i] = v

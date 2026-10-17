@@ -7,7 +7,20 @@ struct ContentView: View {
     @AppStorage("muted") private var muted = false
     @AppStorage("limiterOn") private var limiterOn = true
     @AppStorage("ceilingDB") private var ceilingDB = -1.0
+    @AppStorage("eqOn") private var eqOn = true
+    @AppStorage("lowCutHz") private var lowCutHz = 100.0
+    @AppStorage("presenceDB") private var presenceDB = 3.0
+    @AppStorage("reverbPreset") private var reverbPreset = 0
+    @AppStorage("reverbMix") private var reverbMix = 0.2
     @State private var showSettings = false
+
+    // ส่งค่าเสียงทั้งหมดให้ server (ค่าถูกจำใน AppStorage ทั้งหน้านี้และหน้าตั้งค่า)
+    private func applyAudio() {
+        server.setGain(db: gainDB); server.setMuted(muted)
+        server.setLimiter(on: limiterOn, ceilingDB: ceilingDB)
+        server.setEQ(on: eqOn, lowCutHz: lowCutHz, presenceDB: presenceDB)
+        server.setReverb(preset: reverbPreset, mix: reverbMix)
+    }
 
     // ใช้สีของระบบทั้งหมด เพื่อให้โหมดมืด/สว่างทำงานเอง
     private var dotColor: Color {
@@ -76,6 +89,14 @@ struct ContentView: View {
             }
             .frame(maxWidth: 360)
 
+            Picker("เสียงก้อง", selection: $reverbPreset) {
+                Text("ไม่ก้อง").tag(0)
+                Text("ห้อง").tag(1)
+                Text("ฮอลล์").tag(2)
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 360)
+
             Button {
                 muted.toggle()
             } label: {
@@ -102,13 +123,15 @@ struct ContentView: View {
         }
         .padding()
         .sheet(isPresented: $showSettings) { SettingsView(running: running) }
-        .onAppear {
-            server.setGain(db: gainDB); server.setMuted(muted)
-            server.setLimiter(on: limiterOn, ceilingDB: ceilingDB)
-        }
-        .onChange(of: gainDB) { server.setGain(db: gainDB) }
-        .onChange(of: muted) { server.setMuted(muted) }
-        .onChange(of: limiterOn) { server.setLimiter(on: limiterOn, ceilingDB: ceilingDB) }
-        .onChange(of: ceilingDB) { server.setLimiter(on: limiterOn, ceilingDB: ceilingDB) }
+        .onAppear { applyAudio() }
+        .onChange(of: gainDB) { applyAudio() }
+        .onChange(of: muted) { applyAudio() }
+        .onChange(of: limiterOn) { applyAudio() }
+        .onChange(of: ceilingDB) { applyAudio() }
+        .onChange(of: eqOn) { applyAudio() }
+        .onChange(of: lowCutHz) { applyAudio() }
+        .onChange(of: presenceDB) { applyAudio() }
+        .onChange(of: reverbPreset) { applyAudio() }
+        .onChange(of: reverbMix) { applyAudio() }
     }
 }
