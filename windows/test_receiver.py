@@ -70,5 +70,36 @@ class DriftTest(unittest.TestCase):
         self.assertLess(np.abs(np.diff(y, 2)).max(), 0.02)
 
 
+class MonitorTest(unittest.TestCase):
+    APIS = [{"name": "MME", "default_output_device": 0},
+            {"name": "Windows WASAPI", "default_output_device": 2}]
+
+    def devs(self, default_name):
+        return [{"name": "Speakers", "hostapi": 0, "max_output_channels": 2},
+                {"name": "CABLE Input (VB-Audio)", "hostapi": 1, "max_output_channels": 2},
+                {"name": default_name, "hostapi": 1, "max_output_channels": 2}]
+
+    def test_pick_default_headphones(self):
+        self.assertEqual(receiver.pick_monitor(self.APIS, self.devs("Headphones (USB)")), 2)
+
+    def test_skip_when_default_is_cable(self):
+        # อุปกรณ์หลักเป็น CABLE = เล่นซ้อนเข้า Discord ห้ามเล่น
+        self.assertIsNone(receiver.pick_monitor(self.APIS, self.devs("CABLE Input (VB-Audio)")))
+
+    def test_no_wasapi_default(self):
+        apis = [self.APIS[0], {"name": "Windows WASAPI", "default_output_device": -1}]
+        self.assertIsNone(receiver.pick_monitor(apis, self.devs("Headphones")))
+
+    def test_off_is_silent_but_still_drains(self):
+        mon = receiver.Monitor()
+        mon.jb.push(np.full(RATE // 10, 0.5, dtype=np.float32))
+        before = mon.jb.level_ms()
+        self.assertFalse(np.any(mon.fill(480)))
+        self.assertLess(mon.jb.level_ms(), before)  # ยังดึงต่อ buffer ไม่ค้างของเก่าไว้รอตอนเปิด
+        mon.on = True
+        mon.jb.push(np.full(960, 0.5, dtype=np.float32))
+        self.assertTrue(np.allclose(mon.fill(480), 0.5))
+
+
 if __name__ == "__main__":
     unittest.main()

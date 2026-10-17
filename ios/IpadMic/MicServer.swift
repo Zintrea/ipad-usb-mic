@@ -64,6 +64,21 @@ final class MicServer: ObservableObject {
         reverb.preset = Reverb.Preset(rawValue: preset) ?? .off
     }
 
+    // พอร์ต 7779: บอกตัวรับว่าปุ่ม "ฟังเสียงตัวเอง" เปิดไหม (1 byte 0/1) แยกจากพอร์ตเสียงเพื่อไม่แตะ protocol เดิม
+    private let monitorPort: NWEndpoint.Port = 7779
+    private var monitorListener: NWListener?
+    private var monitorConn: NWConnection?
+    private var monitorOn = false   // แตะบน queue เท่านั้น
+    func setMonitor(_ on: Bool) {
+        queue.async {
+            self.monitorOn = on
+            self.sendMonitor()
+        }
+    }
+    private func sendMonitor() {
+        monitorConn?.send(content: Data([monitorOn ? 1 : 0]), completion: .idempotent)
+    }
+
     private var listener: NWListener?
     private var connection: NWConnection?
     private var ready = false      // header ส่งแล้ว ส่ง PCM ได้
@@ -180,6 +195,24 @@ final class MicServer: ObservableObject {
         }
         newListener.start(queue: queue)
         listener = newListener
+
+        let ml = try NWListener(using: .tcp, on: monitorPort)
+        ml.newConnectionHandler = { [weak self] conn in
+            guard let self = self else { return }
+            self.monitorConn?.cancel()   // รับทีละตัวเหมือนพอร์ตเสียง
+            self.monitorConn = conn
+            conn.stateUpdateHandler = { [weak self, weak conn] s in
+                guard let self = self, let conn = conn, self.monitorConn === conn else { return }
+                switch s {
+                case .ready: self.sendMonitor()
+                case .failed, .cancelled: self.monitorConn = nil
+                default: break
+                }
+            }
+            conn.start(queue: self.queue)
+        }
+        ml.start(queue: queue)
+        monitorListener = ml
     }
 
     func stop() {
@@ -201,6 +234,10 @@ final class MicServer: ObservableObject {
         dropConnection()
         listener?.cancel()
         listener = nil
+        monitorConn?.cancel()
+        monitorConn = nil
+        monitorListener?.cancel()
+        monitorListener = nil
         engine.stop()
         if let s = sink {
             engine.detach(s)

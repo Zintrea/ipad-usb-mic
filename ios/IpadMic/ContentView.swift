@@ -15,6 +15,7 @@ struct ContentView: View {
     @AppStorage("noiseOn") private var noiseOn = true
     @AppStorage("noiseDepthDB") private var noiseDepthDB = 10.0
     @State private var showSettings = false
+    @State private var monitor = false   // ไม่จำค่า: เปิดแอปใหม่ปิดเสมอ กันเสียงหอนถ้าลืมถอดหูฟังแล้วเปิดลำโพง
 
     private var noiseHint: String {
         if server.noiseLearning { return "กำลังเรียนเสียงรอบข้าง อยู่นิ่ง ๆ 3 วินาที..." }
@@ -29,6 +30,7 @@ struct ContentView: View {
         server.setEQ(on: eqOn, lowCutHz: lowCutHz, presenceDB: presenceDB)
         server.setReverb(preset: reverbPreset, mix: reverbMix)
         server.setNoise(on: noiseOn, depthDB: noiseDepthDB)
+        server.setMonitor(monitor)
     }
 
     // ใช้สีของระบบทั้งหมด เพื่อให้โหมดมืด/สว่างทำงานเอง
@@ -117,6 +119,9 @@ struct ContentView: View {
             }
             .frame(maxWidth: 360)
 
+            Toggle("ฟังเสียงตัวเองที่คอม (หูฟังเท่านั้น)", isOn: $monitor)
+                .frame(maxWidth: 360)
+
             Button {
                 muted.toggle()
             } label: {
@@ -155,5 +160,6 @@ struct ContentView: View {
         .onChange(of: reverbMix) { applyAudio() }
         .onChange(of: noiseOn) { applyAudio() }
         .onChange(of: noiseDepthDB) { applyAudio() }
+        .onChange(of: monitor) { applyAudio() }
     }
 }
