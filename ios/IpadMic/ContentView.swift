@@ -13,12 +13,17 @@ struct ContentView: View {
     @AppStorage("reverbPreset") private var reverbPreset = 0
     @AppStorage("reverbMix") private var reverbMix = 0.2
     @AppStorage("noiseOn") private var noiseOn = true
-    @AppStorage("noiseDepthDB") private var noiseDepthDB = 10.0
+    @AppStorage("noiseDepthDB") private var noiseDepthDB = 20.0
+    @AppStorage("noiseFFT") private var noiseFFT = 4096
+    @AppStorage("noiseLearnSec") private var noiseLearnSec = 30.0
+    @AppStorage("noiseSens") private var noiseSens = 2.0
     @State private var showSettings = false
     @State private var monitor = false   // ไม่จำค่า: เปิดแอปใหม่ปิดเสมอ กันเสียงหอนถ้าลืมถอดหูฟังแล้วเปิดลำโพง
 
     private var noiseHint: String {
-        if server.noiseLearning { return "กำลังเรียนเสียงรอบข้าง อยู่นิ่ง ๆ 3 วินาที..." }
+        if server.noiseLearning {
+            return String(format: "กำลังเรียนเสียงรอบข้าง %.0f วินาที: ไม่พูดไม่ร้อง ขยับตัว/หายใจ/ลากเก้าอี้ได้ตามปกติ", noiseLearnSec)
+        }
         if !server.hasNoiseProfile { return "ยังไม่ได้เรียนเสียง: กด START แล้วกดเรียนเสียงตอนเงียบ" }
         return running ? " " : "กด START ก่อนจึงเรียนเสียงใหม่ได้"
     }
@@ -29,7 +34,7 @@ struct ContentView: View {
         server.setLimiter(on: limiterOn, ceilingDB: ceilingDB)
         server.setEQ(on: eqOn, lowCutHz: lowCutHz, presenceDB: presenceDB)
         server.setReverb(preset: reverbPreset, mix: reverbMix)
-        server.setNoise(on: noiseOn, depthDB: noiseDepthDB)
+        server.setNoise(on: noiseOn, depthDB: noiseDepthDB, sensitivity: noiseSens)
         server.setMonitor(monitor)
     }
 
@@ -111,7 +116,7 @@ struct ContentView: View {
             VStack(spacing: 8) {
                 HStack {
                     Toggle("ตัดเสียงรบกวน", isOn: $noiseOn)
-                    Button("เรียนเสียงรอบข้าง") { server.learnNoise() }
+                    Button("เรียนเสียงรอบข้าง") { server.learnNoise(seconds: noiseLearnSec) }
                         .buttonStyle(.bordered)
                         .disabled(!running || server.noiseLearning)
                 }
@@ -133,7 +138,7 @@ struct ContentView: View {
             .tint(muted ? .orange : .green)
 
             Button {
-                if running { server.stop() } else { server.start(raw: raw) }
+                if running { server.stop() } else { server.start(raw: raw, fft: noiseFFT) }
             } label: {
                 Text(running ? "STOP" : "START")
                     .font(.system(size: 36, weight: .bold))
@@ -160,6 +165,7 @@ struct ContentView: View {
         .onChange(of: reverbMix) { applyAudio() }
         .onChange(of: noiseOn) { applyAudio() }
         .onChange(of: noiseDepthDB) { applyAudio() }
+        .onChange(of: noiseSens) { applyAudio() }
         .onChange(of: monitor) { applyAudio() }
     }
 }

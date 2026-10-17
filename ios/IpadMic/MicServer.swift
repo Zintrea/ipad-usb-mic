@@ -37,17 +37,39 @@ final class MicServer: ObservableObject {
     }
     private var clipHoldUntil = 0.0   // ใช้ในเธรดเสียงเท่านั้น
 
-    private let noise = NoiseReducer()
+    // ตัวตัดเสียงรบกวนถูกสร้างใหม่เฉพาะตอน Start (ขนาด FFT เปลี่ยนได้ตอนหยุดอยู่) ส่วนค่าปรับอยู่ใน noiseSettings ที่คงอยู่ตลอด
+    private let noiseSettings: NoiseSettings
+    private var noise: NoiseReducer
     @Published private(set) var noiseLearning = false
     @Published private(set) var hasNoiseProfile = false
-    func setNoise(on: Bool, depthDB: Double) {
-        noise.enabled = on
-        noise.floor = Float(pow(10, -depthDB / 20))
+    func setNoise(on: Bool, depthDB: Double, sensitivity: Double) {
+        noiseSettings.enabled = on
+        noiseSettings.floor = Float(pow(10, -depthDB / 20))
+        noiseSettings.sensitivity = Float(sensitivity)
     }
-    /// ต้องกด Start ก่อน (ต้องมีเสียงจากไมค์) ผลจำไว้ใน UserDefaults
-    func learnNoise() {
-        noise.learn()
+    /// ต้องกด Start ก่อน (ต้องมีเสียงจากไมค์) ผลจำไว้ใน UserDefaults แยกตามขนาด FFT
+    func learnNoise(seconds: Double) {
+        noise.learn(seconds: seconds)
         noiseLearning = true
+    }
+
+    /// ผูกการจำ profile กับตัวตัดเสียงรบกวนตัวนี้ คืนค่าว่ามี profile ที่จำไว้แล้วหรือไม่
+    private func configureNoise(_ r: NoiseReducer) -> Bool {
+        let ud = UserDefaults.standard
+        if let m = ud.array(forKey: "noiseMean\(r.size)") as? [Float],
+           let d = ud.array(forKey: "noiseDev\(r.size)") as? [Float] {
+            r.setProfile(mean: m, dev: d)
+        }
+        let size = r.size
+        r.onLearned = { [weak self] m, d in
+            DispatchQueue.main.async {
+                UserDefaults.standard.set(m, forKey: "noiseMean\(size)")
+                UserDefaults.standard.set(d, forKey: "noiseDev\(size)")
+                self?.noiseLearning = false
+                self?.hasNoiseProfile = true
+            }
+        }
+        return r.hasProfile
     }
 
     private let lowCut = Biquad()
@@ -90,17 +112,11 @@ final class MicServer: ObservableObject {
     private var uiChunk = 0.0
 
     init() {
-        if let saved = UserDefaults.standard.array(forKey: "noiseProfile") as? [Float] {
-            noise.setProfile(saved)
-            hasNoiseProfile = noise.hasProfile
-        }
-        noise.onLearned = { [weak self] p in
-            DispatchQueue.main.async {
-                UserDefaults.standard.set(p, forKey: "noiseProfile")
-                self?.noiseLearning = false
-                self?.hasNoiseProfile = true
-            }
-        }
+        let settings = NoiseSettings()
+        noiseSettings = settings
+        let size = UserDefaults.standard.integer(forKey: "noiseFFT")
+        noise = NoiseReducer(size: size == 0 ? 4096 : size, settings: settings)
+        hasNoiseProfile = configureNoise(noise)
         let nc = NotificationCenter.default
         nc.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: nil) { [weak self] note in
             let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
@@ -123,17 +139,23 @@ final class MicServer: ObservableObject {
     // MARK: - start / stop
 
     /// raw = true: .measurement (ไม่มี auto gain/แต่งเสียง) ทดสอบจริงแล้วเบาและทึบ จึงไม่ใช่ค่าเริ่มต้น
-    func start(raw: Bool) {
+    func start(raw: Bool, fft: Int) {
         AVAudioApplication.requestRecordPermission { [weak self] granted in
             guard let self = self else { return }
             self.queue.async {
-                if granted { self.startOnQueue(raw: raw) } else { self.setState(.error("ไม่ได้รับอนุญาตใช้ไมค์")) }
+                if granted { self.startOnQueue(raw: raw, fft: fft) } else { self.setState(.error("ไม่ได้รับอนุญาตใช้ไมค์")) }
             }
         }
     }
 
-    private func startOnQueue(raw: Bool) {
+    private func startOnQueue(raw: Bool, fft: Int) {
         guard listener == nil else { return }
+        // สร้างใหม่ตอนที่ engine ยังไม่รัน เธรดเสียงจึงไม่แตะ reference นี้ขณะเปลี่ยน
+        if fft != noise.size {
+            noise = NoiseReducer(size: fft, settings: noiseSettings)
+            let has = configureNoise(noise)
+            DispatchQueue.main.async { self.hasNoiseProfile = has }
+        }
         do {
             try startEngine(raw: raw)
             try startListener()
