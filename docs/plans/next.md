@@ -12,11 +12,11 @@ Repo: `C:\Host\02 Projects\13 Ipadmic`, branch `dev` · กฎการทำง
 - ใช้งานจริง: คุยกับเพื่อน = CABLE Output → NVIDIA Broadcast; ร้องเพลง/อัดคลิป = ใส่เอฟเฟกต์ในแอป แล้วส่งเข้า Discord
 - กระบวนการ: 1 ฟีเจอร์ = 1 branch (`feat/...` แตกจาก `dev`) → ผู้ใช้ทดสอบ ipa ของ branch นั้นผ่าน → merge เข้า `dev`
 - กฎหน้าตั้งค่า: ค่าขั้นสูงอยู่หน้าตั้งค่าแยก ทุกค่ามีคำอธิบายบรรทัดเดียวว่าปรับเพื่ออะไร + ปุ่มคืนค่าเริ่มต้น; หน้าหลักมีเฉพาะที่ใช้บ่อย
-- ลำดับ: `feat/iphone` → `feat/limiter` (+ ไฟแดงค้าง 2 วินาที, สร้างหน้าตั้งค่า) → `feat/eq-reverb` → `feat/noise-profile` → `feat/pc-monitor`
+- ลำดับ (ผู้ใช้ย้าย iPhone ไปท้ายสุด): `feat/limiter` (เสร็จ) → `feat/eq-reverb` (ถัดไป) → `feat/noise-profile` → `feat/pc-monitor` → `feat/iphone` (commit แล้ว ยังไม่ push, แตกจาก dev เก่า ต้องเอา dev เข้าไปก่อน)
 - `feat/noise-profile`: เรียนเสียงรอบข้าง 3 วินาที (ผู้ใช้อยู่นิ่ง) ลบแบบจำกัดความลึก เริ่ม ~10 dB; เสียงรบกวนจริงคือพัดลม แอร์ รถ ถนน (เสียงรถวิ่งผ่านลบไม่ได้)
 - `feat/pc-monitor`: ผู้ใช้เลือกทาง ข. = ปุ่มเปิด/ปิดฟังเสียงตัวเองในแอป ต้องเพิ่มช่องส่งคำสั่งจากแอปไปตัวรับ (ใช้ model opus ตอนเริ่ม)
-- `feat/limiter` เขียนแล้ว (ยังไม่ push/ไม่ได้ compile) ดู [LOG.md](../../LOG.md)
-- แผนแยกที่ยังไม่ทำ: push + CI, shortcut `start.bat` ใน Startup ของ Windows
+- `feat/limiter` ผู้ใช้ทดสอบ ipa `build\ci6` ผ่าน, merge เข้า `dev` แล้ว ดู [LOG.md](../../LOG.md)
+- แผนแยกที่ยังไม่ทำ: shortcut `start.bat` ใน Startup ของ Windows
 
 ## ค้างจากเกณฑ์เฟส 2 (SPEC)
 - T1, T2, T4 ผ่านแล้ว (ดูด้านบน)
