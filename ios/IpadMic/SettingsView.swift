@@ -11,6 +11,7 @@ struct SettingsView: View {
     @AppStorage("lowCutHz") private var lowCutHz = 100.0
     @AppStorage("presenceDB") private var presenceDB = 3.0
     @AppStorage("reverbMix") private var reverbMix = 0.2
+    @AppStorage("noiseDepthDB") private var noiseDepthDB = 10.0
 
     var body: some View {
         NavigationStack {
@@ -27,6 +28,13 @@ struct SettingsView: View {
                     Text(String(format: "เพดานเสียง %.1f dB", ceilingDB))
                 } footer: {
                     Text("ระดับสูงสุดที่เสียงจะไปถึง ยิ่งต่ำยิ่งเหลือที่ว่างกันเสียงแตก แต่เสียงรวมเบาลง ค่าเริ่มต้น -1 dB")
+                }
+                Section {
+                    Slider(value: $noiseDepthDB, in: 0...20, step: 1)
+                } header: {
+                    Text(String(format: "ความแรงการตัดเสียงรบกวน %.0f dB", noiseDepthDB))
+                } footer: {
+                    Text("ลดเสียงพัดลม/แอร์ที่เรียนไว้ลงได้มากสุดเท่านี้ ยิ่งมากยิ่งเงียบ แต่ถ้ามากไปเสียงร้องและหางเสียงซอจะเพี้ยน ค่าเริ่มต้น 10 dB (เปิดใช้จะเพิ่มดีเลย์ประมาณ 11 ms)")
                 }
                 Section {
                     Toggle("เปิด EQ เสียงร้อง", isOn: $eqOn)
@@ -74,6 +82,7 @@ struct SettingsView: View {
                         lowCutHz = 100
                         presenceDB = 3
                         reverbMix = 0.2
+                        noiseDepthDB = 10
                         if !running { raw = false }
                     }
                 }
