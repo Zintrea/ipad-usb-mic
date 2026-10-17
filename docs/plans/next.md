@@ -17,6 +17,7 @@ Repo: `C:\Host\02 Projects\13 Ipadmic`, branch `dev` · กฎการทำง
 - `feat/pc-monitor`: ผู้ใช้เลือกทาง ข. = ปุ่มเปิด/ปิดฟังเสียงตัวเองในแอป ต้องเพิ่มช่องส่งคำสั่งจากแอปไปตัวรับ (ใช้ model opus ตอนเริ่ม)
 - `feat/limiter` ผู้ใช้ทดสอบ ipa `build\ci6` ผ่าน, merge เข้า `dev` แล้ว ดู [LOG.md](../../LOG.md)
 - เฟส 4 ([phase4.md](phase4.md)) เขียนครบแล้วเป็น branch ต่อชั้น `feat/eq-reverb` → `feat/noise-profile` → `feat/pc-monitor` ipa อยู่ `build\ci7`, `build\ci8`, `build\ci9` (ci9 = ครบทุกอย่าง) รอผู้ใช้ทดสอบ ci9 แล้วค่อย merge ทั้ง 3 เข้า `dev`
+- `feat/noise-tune` (แตกจาก `feat/pc-monitor`) ปรับตัดเสียงรบกวนตามผลทดสอบ ci9 เขียนแล้ว ยังไม่ push ดู [LOG.md](../../LOG.md) และ [phase4.md](phase4.md); ไอคอนแอปรอ (ผู้ใช้ต้องการไมค์พร้อมคลื่นเสียง): ไม่มี asset catalog จึงเป็นหน้าขาว; หูฟังผู้ใช้เป็นบลูทูธ ฟังเสียงตัวเองเรียลไทม์ต้องใช้หูฟังสาย
 - แผนแยกที่ยังไม่ทำ: shortcut `start.bat` ใน Startup ของ Windows
 
 ## ค้างจากเกณฑ์เฟส 2 (SPEC)
