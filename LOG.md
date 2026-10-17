@@ -50,3 +50,7 @@
 - แผน 2.2 แอป iPad ใช้ไมค์จริง (ดู [docs/plans/phase2.md](docs/plans/phase2.md))
   - **ทำอะไร:** เปลี่ยน `SineServer.swift` เป็น `MicServer.swift` (AVAudioEngine + tap channel 0, session `.record`/`.measurement` 48 kHz, ขอสิทธิ์ไมค์, interruption/route change → `Interrupted`, error ถ้าไม่ได้ 48 kHz), UI เพิ่มแถบระดับเสียง (แดงที่ -3 dBFS) และแสดงขนาดก้อนจริง
   - **ยังไม่ได้ตรวจ:** ยังไม่ได้ compile (ไม่มี Mac ต้องรอ CI ในแผน 2.3), ขนาดก้อนจริงของ tap (ความเสี่ยง R1), พฤติกรรมตอนล็อกจอ
+- ผลทดสอบแอปไมค์ครั้งแรก + แผน 2.2b
+  - **ปัญหาที่เจอ:** จอแสดง "ก้อนละ 100 ms" ค้าง (ความเสี่ยง R1 เกิดจริง) `installTap` ไม่ทำตาม `bufferSize: 480`
+  - **วิธีแก้:** เปลี่ยนเป็น `AVAudioSinkNode` (ได้ก้อนตาม IO buffer ที่ขอ 5 ms), ตัวรับเปิด WASAPI แบบ `latency="low"`
+  - **ยังไม่ได้ตรวจ:** ขนาดก้อนจริงของ sink node บน iPad

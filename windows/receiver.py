@@ -241,7 +241,7 @@ def run(args):
                 print(f"เปิดอุปกรณ์ไม่ได้ ({e}) — ตั้ง CABLE Input เป็น 48000 Hz ใน Sound Control Panel")
                 return 1
             stream = sd.OutputStream(device=idx, samplerate=RATE, channels=2,
-                                     dtype="float32", callback=cb)
+                                     dtype="float32", callback=cb, latency="low")
             stream.start()
 
         while True:

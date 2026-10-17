@@ -12,7 +12,7 @@ final class MicServer: ObservableObject {
     // อัปเดตผ่าน setState เท่านั้น เพื่อให้ขึ้น main thread เสมอ (SwiftUI ห้ามแก้จากเธรดอื่น)
     @Published private(set) var state: State = .stopped
     @Published private(set) var level: Float = 0      // peak 0...1 ใน ~50 ms ล่าสุด
-    @Published private(set) var chunkMs: Double = 0   // ก้อนใหญ่สุดที่ tap ส่งมาใน ~50 ms ล่าสุด
+    @Published private(set) var chunkMs: Double = 0   // ก้อนใหญ่สุดที่ไมค์ส่งมาใน ~50 ms ล่าสุด
 
     // ทางเลือกสำรอง: ถ้า true จะ bind แค่ 127.0.0.1 (ใช้เมื่อ usbmux ต่อ port ไม่ได้)
     private let bindLoopbackOnly = false
@@ -21,13 +21,14 @@ final class MicServer: ObservableObject {
     private let sampleRate: Double = 48000
     private let queue = DispatchQueue(label: "ipadmic.mic")
     private let engine = AVAudioEngine()
+    private var sink: AVAudioSinkNode?
 
     private var listener: NWListener?
     private var connection: NWConnection?
     private var ready = false      // header ส่งแล้ว ส่ง PCM ได้
     private var inFlight = 0       // ก้อนที่ส่งแล้วแต่ระบบยังไม่ตอบรับ กัน memory โตถ้า PC อ่านไม่ทัน
 
-    // ใช้เฉพาะใน tap callback (เธรดเดียว) สำหรับหน่วงการอัปเดต UI
+    // ใช้เฉพาะใน sink callback (เธรดเสียงเธรดเดียว) สำหรับหน่วงการอัปเดต UI
     private var lastUI = 0.0
     private var uiPeak: Float = 0
     private var uiChunk = 0.0
@@ -78,7 +79,7 @@ final class MicServer: ObservableObject {
         }
     }
 
-    /// AVAudioSession .record + .measurement (ไม่ประมวลผลเสียง) แล้วต่อ tap จาก inputNode
+    /// AVAudioSession .record + .measurement (ไม่ประมวลผลเสียง) แล้วต่อ sink node จาก inputNode
     private func startEngine() throws {
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.record, mode: .measurement)
@@ -93,10 +94,19 @@ final class MicServer: ObservableObject {
         guard format.sampleRate == sampleRate else {
             throw MicError(message: "ไมค์ให้ \(Int(format.sampleRate)) Hz ไม่ใช่ 48000")
         }
-        // bufferSize เป็นแค่คำขอ iOS อาจส่งก้อนใหญ่กว่านี้ ดู chunkMs บนจอ
-        input.installTap(onBus: 0, bufferSize: 480, format: format) { [weak self] buffer, _ in
-            self?.handle(buffer)
+        // ใช้ sink node แทน installTap: tap ส่งก้อนละ 100 ms ตายตัว (วัดจริงบน iPad)
+        // sink ได้ก้อนตาม IO buffer ของฮาร์ดแวร์ (ขอไว้ 5 ms) → latency ต่ำ
+        let newSink = AVAudioSinkNode { [weak self] _, frameCount, abl -> OSStatus in
+            let buffers = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: abl))
+            // format มาตรฐานของ inputNode เป็น non-interleaved: buffers[0] = channel 0
+            if let p = buffers.first?.mData {
+                self?.handle(p.assumingMemoryBound(to: Float.self), Int(frameCount))
+            }
+            return noErr
         }
+        engine.attach(newSink)
+        engine.connect(input, to: newSink, format: format)
+        sink = newSink
         engine.prepare()
         try engine.start()
     }
@@ -138,17 +148,19 @@ final class MicServer: ObservableObject {
         dropConnection()
         listener?.cancel()
         listener = nil
-        engine.inputNode.removeTap(onBus: 0)
         engine.stop()
+        if let s = sink {
+            engine.detach(s)
+            sink = nil
+        }
         try? AVAudioSession.sharedInstance().setActive(false)
         DispatchQueue.main.async { self.level = 0 }
     }
 
     // MARK: - เสียงจากไมค์ (เรียกจากเธรดเสียง ห้ามบล็อก)
 
-    private func handle(_ buffer: AVAudioPCMBuffer) {
-        let n = Int(buffer.frameLength)
-        guard n > 0, let ch = buffer.floatChannelData?[0] else { return }   // เอาแค่ channel 0
+    private func handle(_ ch: UnsafePointer<Float>, _ n: Int) {
+        guard n > 0 else { return }
         var peak: Float = 0
         for i in 0..<n { peak = max(peak, abs(ch[i])) }
         uiPeak = max(uiPeak, peak)
