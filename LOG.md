@@ -27,3 +27,8 @@
   - **ผลตรวจ:** signature ตรงกับโค้ด: `select_device(udid=None, connection_type=None, usbmux_address=None)` และ `MuxDevice.connect(self, port, usbmux_address=None) -> socket`; `--list-devices` เจอ `CABLE Input (VB-Audio Virtual Cable)` บน WASAPI 48000 Hz
   - **CI:** run 38947126453 ผ่าน (48 วินาที) ได้ `IpadMic.ipa` ขนาด 25010 byte มี warning เรื่อง Node.js 20 deprecated ของ actions/checkout@v4 และ upload-artifact@v4 (ยังไม่กระทบ)
   - **ยังไม่ได้ตรวจ:** ติดตั้งลง iPad, การต่อผ่าน usbmux จริง, WAV 440 Hz
+- เปลี่ยนเครื่องมือ sideload เป็น AltServer (ดู [GUIDE ข้อ 8](docs/GUIDE.md#8-ทำไมใช้-altserver-ไม่ใช้-sideloadly--iloader))
+  - **ทำอะไร:** ถอน iTunes เวอร์ชัน Store, ลง iTunes 12.13.11.1 จากเว็บ Apple, ลง AltServer แล้วติดตั้ง `IpadMic.ipa` ลง iPad สำเร็จ แอปเปิดได้
+  - **ทำไม:** Sideloadly และ iloader ล็อกอิน Apple ไม่ผ่าน (grandslam 503, anisette 502, -45025) นานกว่า 12 ชั่วโมง เพราะ Apple บล็อกตัวระบุ Xcode
+  - **แก้เอกสาร:** GUIDE ข้อ 5.3 และ 8, `docs/plans/phase1-next.md`, คอมเมนต์ `build.yml`
+  - **ยังไม่ได้ตรวจ:** การต่อผ่าน usbmux จริง, WAV 440 Hz; การที่ไม่พบ service "Apple Mobile Device" ยังไม่ได้แก้ แต่ AltServer เห็น iPad แล้ว

@@ -114,7 +114,8 @@ gh run view <run-id> --log-failed
 ---
 
 ## หลังแผน 5: สิ่งที่ผู้ใช้ทำเอง (โมเดลแค่บอกขั้นตอน ห้ามทำแทน)
-1. เปิด Sideloadly → ลาก `build\ci\IpadMic.ipa` → ใส่ Apple ID → Start
+1. AltServer: taskbar **^** → Shift+คลิกไอคอนเพชร → Sideload .ipa → เลือก iPad → `build\ci\IpadMic.ipa` → ใส่ Apple ID สำรอง
+   (Sideloadly/iloader ใช้ไม่ได้แล้ว เหตุผลดู [GUIDE ข้อ 8](../GUIDE.md#8-ทำไมใช้-altserver-ไม่ใช้-sideloadly--iloader))
 2. iPad:
    - Settings → Privacy & Security → Developer Mode → เปิด (เครื่องจะรีสตาร์ต)
    - Settings → General → VPN & Device Management → Trust

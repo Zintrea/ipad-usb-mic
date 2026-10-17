@@ -25,7 +25,7 @@ iPad (แอป)  --TCP พอร์ต 7777-->  usbmux  -->  Python  -->  VB-Ca
 | underrun | เล่นเสียงเร็วกว่าที่ข้อมูลมา buffer หมด ได้ยินเป็นเสียงสะดุด |
 | TCP / port | วิธีส่งข้อมูลแบบไม่ตกหล่น / "เลขห้อง" ของโปรแกรม ที่นี่คือ 7777 |
 | usbmux | บริการของ Apple ที่ทำท่อ TCP ผ่านสาย USB (มากับแอป Apple Devices) |
-| sideload | ติดตั้งแอปเองโดยไม่ผ่าน App Store (ใช้ Sideloadly) |
+| sideload | ติดตั้งแอปเองโดยไม่ผ่าน App Store (ใช้ AltServer ดูเหตุผลที่ข้อ 8) |
 | CI | ให้เครื่องบน GitHub build แอปให้อัตโนมัติ เพราะเราไม่มี Mac |
 
 ### 3. โครงไฟล์ของ repo
@@ -75,7 +75,13 @@ iPad (แอป)  --TCP พอร์ต 7777-->  usbmux  -->  Python  -->  VB-Ca
    ```
    ควรเห็น workflow `build-ios` จบด้วยเครื่องหมายถูก
 2. **ดาวน์โหลด artifact** `gh run download -n IpadMic-ipa` ควรได้ไฟล์ `IpadMic.ipa`
-3. **ลงด้วย Sideloadly** เสียบ iPad, เปิด Sideloadly, เลือก `IpadMic.ipa`, ใส่ Apple ID แล้วกด Start จากนั้นเปิด Developer Mode และ trust profile บน iPad
+3. **ลงด้วย AltServer** (ติดตั้งครั้งแรกดูข้อ 8)
+   - เสียบ iPad ปลดล็อกจอ
+   - ที่ taskbar กด **^** (Show hidden icons) → **กด Shift ค้าง** แล้วคลิกซ้ายไอคอนรูปเพชร → **Sideload .ipa** → เลือก iPad → เลือก `build\ci\IpadMic.ipa`
+   - ใส่ Apple ID **สำรอง** (ไม่ใช้บัญชีหลัก) รอจนขึ้นว่าติดตั้งสำเร็จ
+   - อย่ากด "Install AltStore" (นั่นคือลงแอป AltStore ไม่ใช่แอปเรา)
+   - iPad: เปิด Developer Mode และ Settings → General → VPN & Device Management → trust profile
+   - Apple ID ฟรีเซ็นได้ 7 วัน หมดอายุแล้วต้องทำข้อนี้ซ้ำ
 4. **สร้าง venv และติดตั้ง** (ต้องมี Python 3.11)
    ```
    py -3.11 -m venv windows\.venv
@@ -102,3 +108,32 @@ iPad (แอป)  --TCP พอร์ต 7777-->  usbmux  -->  Python  -->  VB-Ca
 | `ไม่พบ iPad` | เสียบสาย ปลดล็อกจอ กด "Trust This Computer" และตรวจว่าติดตั้งแอป Apple Devices แล้ว |
 | ต่อ port 7777 ไม่ได้ | แอปยังไม่ได้กด START หรือ usbmux ต่อ listener แบบทุก interface ไม่ได้ ลองแก้ `bindLoopbackOnly = true` ใน `SineServer.swift` แล้ว build ใหม่ |
 | rate ไม่ตรง / เปิดอุปกรณ์ไม่ได้ | ตั้ง CABLE Input เป็น 48000 Hz ใน Sound Control Panel (แท็บ Advanced) |
+| เปิด AltServer แล้วไม่มีหน้าต่าง | ปกติ AltServer อยู่ใน tray เท่านั้น กด **^** ที่ taskbar อย่ากดเปิดซ้ำ (จะรันซ้อนหลายตัว) |
+
+### 8. ทำไมใช้ AltServer (ไม่ใช้ Sideloadly / iloader)
+
+สถานะ 2026-10-17: ติดตั้งสำเร็จด้วย AltServer หลังลองเครื่องมืออื่นไม่ผ่านนานกว่า 12 ชั่วโมง
+
+**อาการที่เจอ**
+
+| เครื่องมือ | error |
+|---|---|
+| Sideloadly (เวอร์ชันล่าสุด) | `GSA returned a non-plist response (HTTP 503 Service Temporarily Unavailable)` |
+| iloader (isideload 0.4.6) | `503 Service Temporarily Unavailable ... gsa.apple.com/grandslam/GsService2` |
+| iloader | anisette `502 Bad Gateway ... mac-ani.jkcoxson.com/v3/client_info` และ `unknown session (-45025)` |
+
+**สิ่งที่ลองแล้วไม่ช่วย:** อัปเดต iloader 2.3.9+, Reset Anisette, เว้นระยะ 30-60 นาที, เปลี่ยนเครือข่าย/hotspot, เปลี่ยน Apple ID, แก้ hosts, ติดตั้ง iCloud
+
+**สาเหตุ**
+1. ตั้งแต่ต้นเดือนกันยายน 2026 Apple ตอบ 503 กับการล็อกอินที่ระบุตัวเป็น Xcode (`com.apple.dt.Xcode` ใน header `X-MMe-Client-Info`) ซึ่ง Sideloadly และ iloader ใช้ จึงเปลี่ยนบัญชีหรือ IP ก็ไม่ช่วย ([AltStore PR #1790](https://github.com/altstoreio/AltStore/pull/1790), [iloader PR #700](https://github.com/nab138/iloader/pull/700))
+2. iloader พึ่ง anisette server ภายนอก ซึ่งล่มเป็นช่วง ๆ (วัดได้ 200/502 สลับกัน)
+
+**ทำไม AltServer ผ่าน:** ระบุตัวเป็น `akd` ซึ่ง Apple ยังไม่บล็อก และสร้าง anisette ในเครื่องผ่าน iTunes/iCloud ไม่ต้องพึ่ง server ภายนอก (ข้อหลังยังไม่ได้ตรวจยืนยัน)
+
+**ติดตั้งครั้งแรก (ทำแล้วบนเครื่องนี้)**
+1. ถอน iTunes เวอร์ชัน Microsoft Store: `Get-AppxPackage AppleInc.iTunes | Remove-AppxPackage` (AltServer ใช้เวอร์ชัน Store ไม่ได้)
+2. ติดตั้ง iTunes 64-bit จาก `https://www.apple.com/itunes/download/win64` (ตัวติดตั้งเซ็นโดย Apple Inc.) ผลที่ควรเห็น: Installed apps มี `iTunes 12.13.11.1` หรือใหม่กว่า
+3. iCloud ต้องเป็นเวอร์ชันเว็บ (เครื่องนี้มี 7.21)
+4. ติดตั้ง AltServer จาก `https://cdn.altstore.io/file/altstore/altinstaller.zip` แตก zip แล้วรัน `altinstaller.msi` (ไฟล์ไม่มีลายเซ็นดิจิทัล; SHA256 ที่ใช้: `944186A28493B628A7702C514155140D530DFADC31F4279033AE576F1403CD5F`) ผลที่ควรเห็น: มี `C:\Program Files (x86)\AltServer\AltServer.exe` และไอคอนรูปเพชรใน tray ที่เห็นชื่อ iPad ในเมนู Install AltStore
+
+**ถ้าวันหนึ่ง AltServer เจอ 503 ด้วย:** แปลว่า Apple บล็อก `akd` แล้ว ไม่ต้องลองซ้ำรัว ๆ (เสี่ยงบัญชีถูกล็อก -20209) ทางที่เหลือคือรอเครื่องมือออกตัวแก้ หรือสมัคร Apple Developer Program แล้วให้ CI เซ็นเอง

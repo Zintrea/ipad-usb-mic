@@ -16,14 +16,14 @@ jobs:
       - name: Generate Xcode project
         run: cd ios && xcodegen generate
       # archive แบบไม่เซ็นชื่อ เพราะไม่มีใบรับรอง Apple Developer
-      # Sideloadly จะเซ็นด้วย Apple ID ฟรีให้ตอนติดตั้งเอง
+      # AltServer จะเซ็นด้วย Apple ID ฟรีให้ตอนติดตั้งเอง
       - name: Build (unsigned)
         run: |
           xcodebuild -project ios/IpadMic.xcodeproj -scheme IpadMic \
             -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
             -archivePath build/IpadMic.xcarchive archive \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
-      # .ipa คือไฟล์ zip ที่มีโฟลเดอร์ Payload/*.app ข้างใน Sideloadly ต้องการรูปแบบนี้
+      # .ipa คือไฟล์ zip ที่มีโฟลเดอร์ Payload/*.app ข้างใน AltServer ต้องการรูปแบบนี้
       - name: Package .ipa
         run: |
           mkdir -p build/Payload
