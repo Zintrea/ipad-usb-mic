@@ -5,6 +5,9 @@ struct ContentView: View {
     @AppStorage("rawMode") private var raw = false   // จำค่าข้ามการเปิดแอป
     @AppStorage("gainDB") private var gainDB = 0.0
     @AppStorage("muted") private var muted = false
+    @AppStorage("limiterOn") private var limiterOn = true
+    @AppStorage("ceilingDB") private var ceilingDB = -1.0
+    @State private var showSettings = false
 
     // ใช้สีของระบบทั้งหมด เพื่อให้โหมดมืด/สว่างทำงานเอง
     private var dotColor: Color {
@@ -36,12 +39,22 @@ struct ContentView: View {
         guard server.level > 0 else { return 0 }
         return CGFloat(max(0, min(1, (20 * log10(server.level) + 60) / 60)))
     }
-    private var levelColor: Color { server.level >= 0.708 ? .red : .green }
+    // แดงเมื่อใกล้เพดาน หรือค้าง 2 วินาทีหลังเสียงเกิน 0 dBFS ก่อนเข้า limiter
+    private var levelColor: Color { server.level >= 0.708 || server.clipping ? .red : .green }
 
     var body: some View {
         VStack(spacing: 32) {
-            Text("iPad Mic")
-                .font(.largeTitle.bold())
+            HStack {
+                Color.clear.frame(width: 44, height: 44)
+                Spacer()
+                Text("iPad Mic")
+                    .font(.largeTitle.bold())
+                Spacer()
+                Button { showSettings = true } label: {
+                    Image(systemName: "gearshape").font(.title2).frame(width: 44, height: 44)
+                }
+            }
+            .frame(maxWidth: 360)
 
             HStack(spacing: 12) {
                 Circle().fill(dotColor).frame(width: 20, height: 20)
@@ -73,15 +86,6 @@ struct ContentView: View {
             .buttonStyle(.bordered)
             .tint(muted ? .orange : .green)
 
-            // เปลี่ยนโหมดได้ตอนหยุดเท่านั้น เพราะต้องตั้ง AVAudioSession ใหม่
-            Picker("โหมดเสียง", selection: $raw) {
-                Text("มาตรฐาน (แนะนำ)").tag(false)
-                Text("ดิบ").tag(true)
-            }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 360)
-            .disabled(running)
-
             Button {
                 if running { server.stop() } else { server.start(raw: raw) }
             } label: {
@@ -97,8 +101,14 @@ struct ContentView: View {
                 .foregroundStyle(.secondary)
         }
         .padding()
-        .onAppear { server.setGain(db: gainDB); server.setMuted(muted) }
+        .sheet(isPresented: $showSettings) { SettingsView(running: running) }
+        .onAppear {
+            server.setGain(db: gainDB); server.setMuted(muted)
+            server.setLimiter(on: limiterOn, ceilingDB: ceilingDB)
+        }
         .onChange(of: gainDB) { server.setGain(db: gainDB) }
         .onChange(of: muted) { server.setMuted(muted) }
+        .onChange(of: limiterOn) { server.setLimiter(on: limiterOn, ceilingDB: ceilingDB) }
+        .onChange(of: ceilingDB) { server.setLimiter(on: limiterOn, ceilingDB: ceilingDB) }
     }
 }
