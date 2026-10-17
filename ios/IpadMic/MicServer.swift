@@ -13,6 +13,7 @@ final class MicServer: ObservableObject {
     @Published private(set) var state: State = .stopped
     @Published private(set) var level: Float = 0      // peak 0...1 ใน ~50 ms ล่าสุด
     @Published private(set) var chunkMs: Double = 0   // ก้อนใหญ่สุดที่ไมค์ส่งมาใน ~50 ms ล่าสุด
+    @Published private(set) var clipping = false      // true ค้าง 2 วินาทีหลังเสียงเกิน 0 dBFS ก่อน limiter
 
     // ทางเลือกสำรอง: ถ้า true จะ bind แค่ 127.0.0.1 (ใช้เมื่อ usbmux ต่อ port ไม่ได้)
     private let bindLoopbackOnly = false
@@ -29,6 +30,77 @@ final class MicServer: ObservableObject {
     func setGain(db: Double) { gain = Float(pow(10, db / 20)) }
     func setMuted(_ m: Bool) { muted = m }
 
+    private let limiter = Limiter()
+    func setLimiter(on: Bool, ceilingDB: Double) {
+        limiter.enabled = on
+        limiter.ceiling = Float(pow(10, ceilingDB / 20))
+    }
+    private var clipHoldUntil = 0.0   // ใช้ในเธรดเสียงเท่านั้น
+
+    // ตัวตัดเสียงรบกวนถูกสร้างใหม่เฉพาะตอน Start (ขนาด FFT เปลี่ยนได้ตอนหยุดอยู่) ส่วนค่าปรับอยู่ใน noiseSettings ที่คงอยู่ตลอด
+    private let noiseSettings: NoiseSettings
+    private var noise: NoiseReducer
+    @Published private(set) var noiseLearning = false
+    @Published private(set) var hasNoiseProfile = false
+    func setNoise(on: Bool, depthDB: Double, sensitivity: Double) {
+        noiseSettings.enabled = on
+        noiseSettings.floor = Float(pow(10, -depthDB / 20))
+        noiseSettings.sensitivity = Float(sensitivity)
+    }
+    /// ต้องกด Start ก่อน (ต้องมีเสียงจากไมค์) ผลจำไว้ใน UserDefaults แยกตามขนาด FFT
+    func learnNoise(seconds: Double) {
+        noise.learn(seconds: seconds)
+        noiseLearning = true
+    }
+
+    /// ผูกการจำ profile กับตัวตัดเสียงรบกวนตัวนี้ คืนค่าว่ามี profile ที่จำไว้แล้วหรือไม่
+    private func configureNoise(_ r: NoiseReducer) -> Bool {
+        let ud = UserDefaults.standard
+        if let m = ud.array(forKey: "noiseMean\(r.size)") as? [Float],
+           let d = ud.array(forKey: "noiseDev\(r.size)") as? [Float] {
+            r.setProfile(mean: m, dev: d)
+        }
+        let size = r.size
+        r.onLearned = { [weak self] m, d in
+            DispatchQueue.main.async {
+                UserDefaults.standard.set(m, forKey: "noiseMean\(size)")
+                UserDefaults.standard.set(d, forKey: "noiseDev\(size)")
+                self?.noiseLearning = false
+                self?.hasNoiseProfile = true
+            }
+        }
+        return r.hasProfile
+    }
+
+    private let lowCut = Biquad()
+    private let presence = Biquad()
+    private let reverb = Reverb()
+    func setEQ(on: Bool, lowCutHz: Double, presenceDB: Double) {
+        lowCut.setHighPass(freq: lowCutHz)
+        presence.setPeaking(freq: 4000, gainDB: presenceDB)
+        lowCut.enabled = on
+        presence.enabled = on
+    }
+    func setReverb(preset: Int, mix: Double) {
+        reverb.mix = Float(mix)
+        reverb.preset = Reverb.Preset(rawValue: preset) ?? .off
+    }
+
+    // พอร์ต 7779: บอกตัวรับว่าปุ่ม "ฟังเสียงตัวเอง" เปิดไหม (1 byte 0/1) แยกจากพอร์ตเสียงเพื่อไม่แตะ protocol เดิม
+    private let monitorPort: NWEndpoint.Port = 7779
+    private var monitorListener: NWListener?
+    private var monitorConn: NWConnection?
+    private var monitorOn = false   // แตะบน queue เท่านั้น
+    func setMonitor(_ on: Bool) {
+        queue.async {
+            self.monitorOn = on
+            self.sendMonitor()
+        }
+    }
+    private func sendMonitor() {
+        monitorConn?.send(content: Data([monitorOn ? 1 : 0]), completion: .idempotent)
+    }
+
     private var listener: NWListener?
     private var connection: NWConnection?
     private var ready = false      // header ส่งแล้ว ส่ง PCM ได้
@@ -40,6 +112,11 @@ final class MicServer: ObservableObject {
     private var uiChunk = 0.0
 
     init() {
+        let settings = NoiseSettings()
+        noiseSettings = settings
+        let size = UserDefaults.standard.integer(forKey: "noiseFFT")
+        noise = NoiseReducer(size: size == 0 ? 4096 : size, settings: settings)
+        hasNoiseProfile = configureNoise(noise)
         let nc = NotificationCenter.default
         nc.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: nil) { [weak self] note in
             let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
@@ -62,17 +139,23 @@ final class MicServer: ObservableObject {
     // MARK: - start / stop
 
     /// raw = true: .measurement (ไม่มี auto gain/แต่งเสียง) ทดสอบจริงแล้วเบาและทึบ จึงไม่ใช่ค่าเริ่มต้น
-    func start(raw: Bool) {
+    func start(raw: Bool, fft: Int) {
         AVAudioApplication.requestRecordPermission { [weak self] granted in
             guard let self = self else { return }
             self.queue.async {
-                if granted { self.startOnQueue(raw: raw) } else { self.setState(.error("ไม่ได้รับอนุญาตใช้ไมค์")) }
+                if granted { self.startOnQueue(raw: raw, fft: fft) } else { self.setState(.error("ไม่ได้รับอนุญาตใช้ไมค์")) }
             }
         }
     }
 
-    private func startOnQueue(raw: Bool) {
+    private func startOnQueue(raw: Bool, fft: Int) {
         guard listener == nil else { return }
+        // สร้างใหม่ตอนที่ engine ยังไม่รัน เธรดเสียงจึงไม่แตะ reference นี้ขณะเปลี่ยน
+        if fft != noise.size {
+            noise = NoiseReducer(size: fft, settings: noiseSettings)
+            let has = configureNoise(noise)
+            DispatchQueue.main.async { self.hasNoiseProfile = has }
+        }
         do {
             try startEngine(raw: raw)
             try startListener()
@@ -134,6 +217,24 @@ final class MicServer: ObservableObject {
         }
         newListener.start(queue: queue)
         listener = newListener
+
+        let ml = try NWListener(using: .tcp, on: monitorPort)
+        ml.newConnectionHandler = { [weak self] conn in
+            guard let self = self else { return }
+            self.monitorConn?.cancel()   // รับทีละตัวเหมือนพอร์ตเสียง
+            self.monitorConn = conn
+            conn.stateUpdateHandler = { [weak self, weak conn] s in
+                guard let self = self, let conn = conn, self.monitorConn === conn else { return }
+                switch s {
+                case .ready: self.sendMonitor()
+                case .failed, .cancelled: self.monitorConn = nil
+                default: break
+                }
+            }
+            conn.start(queue: self.queue)
+        }
+        ml.start(queue: queue)
+        monitorListener = ml
     }
 
     func stop() {
@@ -155,13 +256,18 @@ final class MicServer: ObservableObject {
         dropConnection()
         listener?.cancel()
         listener = nil
+        monitorConn?.cancel()
+        monitorConn = nil
+        monitorListener?.cancel()
+        monitorListener = nil
         engine.stop()
         if let s = sink {
             engine.detach(s)
             sink = nil
         }
         try? AVAudioSession.sharedInstance().setActive(false)
-        DispatchQueue.main.async { self.level = 0 }
+        noise.cancelLearn()   // engine หยุดแล้ว เธรดเสียงไม่แตะข้อมูลนี้
+        DispatchQueue.main.async { self.level = 0; self.clipping = false; self.noiseLearning = false }
     }
 
     // MARK: - เสียงจากไมค์ (เรียกจากเธรดเสียง ห้ามบล็อก)
@@ -169,24 +275,29 @@ final class MicServer: ObservableObject {
     private func handle(_ ch: UnsafePointer<Float>, _ n: Int) {
         guard n > 0 else { return }
         // ปิดไมค์ = ส่งเสียงเงียบ (ไม่ตัดสาย) ตัวรับไม่ต้องต่อใหม่ DAW ไม่สะดุด
-        let g = muted ? 0 : gain
+        let g = gain, m = muted
         var out = [Float](repeating: 0, count: n)
         var peak: Float = 0
-        if g > 0 {
-            for i in 0..<n {
-                let v = max(-1, min(1, ch[i] * g))   // clip ที่ ±1 เหมือนที่ตัวรับจะได้
-                out[i] = v
-                peak = max(peak, abs(v))
-            }
+        var clipped = false
+        // ลำดับ: ตัดเสียงรบกวน → gain → EQ → reverb → limiter (ดู docs/plans/phase4.md)
+        // ป้อน limiter ทุก sample แม้ปิดไมค์ เพื่อให้ดีเลย์คงที่ ตัด ±1 ซ้ำเป็นตัวกันสุดท้าย
+        for i in 0..<n {
+            var x = reverb.process(presence.process(lowCut.process(noise.process(ch[i]) * g)))
+            if m { x = 0 }                    // ปิดหลัง reverb ให้เงียบทันที ไม่มีหางเสียงค้าง
+            if abs(x) > 1 { clipped = true }
+            let v = max(-1, min(1, limiter.process(x)))
+            out[i] = v
+            peak = max(peak, abs(v))
         }
+        let now = ProcessInfo.processInfo.systemUptime
+        if clipped { clipHoldUntil = now + 2 }
         uiPeak = max(uiPeak, peak)
         uiChunk = max(uiChunk, Double(n) / sampleRate * 1000)
-        let now = ProcessInfo.processInfo.systemUptime
         if now - lastUI >= 0.05 {
             lastUI = now
-            let p = uiPeak, c = uiChunk
+            let p = uiPeak, c = uiChunk, clip = now < clipHoldUntil
             uiPeak = 0; uiChunk = 0
-            DispatchQueue.main.async { self.level = p; self.chunkMs = c }
+            DispatchQueue.main.async { self.level = p; self.chunkMs = c; self.clipping = clip }
         }
         let data = out.withUnsafeBufferPointer { Data(buffer: $0) }
         queue.async { self.send(data) }

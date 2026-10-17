@@ -24,13 +24,14 @@ iPad mic → AVAudioEngine + AVAudioSinkNode (Float32 mono 48 kHz, mode .default
 → usbmux (Apple Devices) → Python + pymobiledevice3
 → jitter buffer 30 ms + ชดเชย drift ด้วย np.interp
 → sounddevice (WASAPI) → "CABLE Input" → DAW เลือก "CABLE Output"
+(ฟังเสียงตัวเอง: แอปพอร์ต 7779 ส่ง 1 byte เปิด/ปิด → ตัวรับเล่นออกอุปกรณ์เสียงหลักผ่าน buffer 10 ms)
 
 ## C1. แอป iPad (`ios/`)
 - SwiftUI, iPadOS 17+, ไม่มี dependency, ใช้ XcodeGen (`project.yml`)
 - AVAudioSession: .record + .default (ค่าเริ่มต้น มี auto gain) หรือ .measurement (โหมดดิบ เลือกในแอป), preferredSampleRate 48000
   (เดิมบังคับ .measurement แต่ทดสอบจริง 2026-10-17 เสียงเบาและทึบ ดู LOG)
   ถ้าได้ rate อื่นให้แสดง error (ไม่ทำตัวแปลง)
-- ส่ง Float32 ตรงจาก inputNode tap แบบ mono
+- ส่ง Float32 mono จาก AVAudioSinkNode ผ่านลำดับ ตัดเสียงรบกวน → gain → EQ → reverb → limiter (ดู [phase4.md](docs/plans/phase4.md))
 - กด Start แล้ว engine รันตลอดจนกว่าจะกด Stop
   ถ้ายังไม่มี client ให้ทิ้ง sample ไป เพื่อไม่ให้แอปถูก suspend ตอนล็อกจอ
 - header ครั้งแรก: magic, version, sample rate, channels, format → ตามด้วย PCM ล้วน
@@ -77,6 +78,12 @@ iPad mic → AVAudioEngine + AVAudioSinkNode (Float32 mono 48 kHz, mode .default
 | 1 Spike | repo + CI + แอปส่ง sine 440 Hz + receiver เล็กสุด | CI ผ่าน, มี .ipa / log แสดง header / WAV จาก CABLE Output เป็น 440 Hz |
 | 2 ไมค์จริง | ไมค์จริง + ล็อกจอ + ต่อใหม่อัตโนมัติ + drift | ล็อกจอ 10 นาทีโดยไม่มี underrun / ทดสอบ 1 ชั่วโมงแล้ว buffer ไม่หลุดเป้า / ถอดแล้วเสียบสายใหม่แล้วกลับมาเอง / WAV เสียงร้อง |
 | 3 เอกสาร | README + LOG | ผู้ใช้ทำตาม README ได้จริง |
+| 4 ฟีเจอร์เสียง | iPhone, limiter, EQ/reverb, ตัดเสียงรบกวนแบบเรียนเสียง, ฟังเสียงตัวเอง (ลำดับและรายละเอียดใน [next.md](docs/plans/next.md)) | ผู้ใช้ทดสอบ ipa ของแต่ละ branch แล้วผ่านก่อน merge เข้า `dev` |
+
+## กฎ UI ฟีเจอร์เสียง
+- หน้าหลักมีเฉพาะที่ใช้บ่อย; ค่าขั้นสูงอยู่หน้าตั้งค่าแยก
+- ทุกค่าในหน้าตั้งค่ามีคำอธิบายบรรทัดเดียวว่าปรับเพื่ออะไร และมีปุ่มคืนค่าเริ่มต้น
+- ค่าเริ่มต้นต้องดีพอที่ผู้ใช้ไม่ต้องแตะ; ห้ามแก้ด้วย option ที่ต้องพิมพ์
 
 ## หน้าที่ของผู้ใช้
 - สร้าง repo หรืออนุญาตให้ใช้ gh, ติดตั้งด้วย AltServer, อนุญาตไมค์
@@ -101,4 +108,5 @@ iPad mic → AVAudioEngine + AVAudioSinkNode (Float32 mono 48 kHz, mode .default
 - author: Zintrea <boonyapatkittichonthawat@gmail.com> (ตั้งใน repo config ก่อน commit แรก)
 - ห้ามใช้ Claude เป็น author, ห้ามใส่ Co-Authored-By / Claude-Session / "Generated with Claude Code"
 - commit แรกอยู่บน main ได้ หลังจากนั้นทำงานบน branch `dev`
+- 1 ฟีเจอร์ = 1 branch `feat/<ชื่อ>` แตกจาก `dev`; merge เข้า `dev` หลังผู้ใช้ทดสอบ ipa ของ branch นั้นผ่านเท่านั้น (merge/push เป็นแผนแยก)
 - GitHub: `Zintrea/ipad-usb-mic` (public)

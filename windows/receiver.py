@@ -147,9 +147,78 @@ def recv_exact(sock, n):
 
 NO_DATA_S = 3.0  # เงียบเกินนี้ถือว่าสายหลุด/แอปหยุด
 CONTROL_PORT = 7778  # localhost เท่านั้น: ตัวรับตัวใหม่ใช้สั่งตัวเก่าให้ปิด
+MONITOR_PORT = 7779  # บน iPad: ส่ง 1 byte (0/1) บอกว่าปุ่ม "ฟังเสียงตัวเอง" เปิดอยู่ไหม
+MONITOR_MS = 10      # buffer ของหูฟังเล็กกว่า CABLE: สะดุดบ้างได้ แต่ดีเลย์ต่ำ
 
 
-def session(args, jb, wav):
+def pick_monitor(apis, devices):
+    """อุปกรณ์เสียงหลัก (WASAPI) ของ Windows ไว้เล่นเสียงตัวเอง; ไม่มี หรือเป็น CABLE = None"""
+    for api in apis:
+        if "wasapi" in api["name"].lower():
+            i = api["default_output_device"]
+            if i < 0 or "cable" in devices[i]["name"].lower():
+                return None
+            return i
+    return None
+
+
+def is_bluetooth(devices, idx):
+    """หูฟังบลูทูธมีอุปกรณ์ Hands-Free จาก bthhfenum.sys ที่ชื่อรุ่นเดียวกันอยู่ในรายการ
+    shortcut: เทียบจากชื่อรุ่นในวงเล็บสุดท้าย รุ่นที่ไม่มีอุปกรณ์ Hands-Free จะตรวจไม่เจอ"""
+    name = devices[idx]["name"]
+    if "bluetooth" in name.lower():
+        return True
+    product = name[name.rfind("(") + 1:].rstrip(")").lower() if "(" in name else ""
+    return bool(product) and any("bthhfenum" in d["name"].lower() and product in d["name"].lower()
+                                 for d in devices)
+
+
+class Monitor:
+    """เสียงที่ส่งไปหูฟัง: ใช้ Jitter แยก เพราะนาฬิกาของหูฟังกับ CABLE ไม่ตรงกัน"""
+
+    def __init__(self):
+        self.jb = Jitter(MONITOR_MS)
+        self.on = False  # เขียนจาก thread อ่านพอร์ต 7779 อ่านจาก callback (ค่าเดียว ไม่ต้องล็อก)
+
+    def fill(self, frames):
+        m = self.jb.pull(frames)  # ดึงต่อแม้ปิด ไม่งั้นเปิดทีหลังจะได้ยินเสียงเก่าค้าง
+        return m if self.on else np.zeros(frames, dtype=np.float32)
+
+
+def watch_monitor(args, mon, socks):
+    """ต่อพอร์ต 7779 ของแอป อ่านสถานะปุ่มจนกว่าจะหลุด แอปเวอร์ชันเก่าไม่มีพอร์ตนี้ = ข้าม"""
+    from pymobiledevice3.usbmux import select_device
+
+    async def connect():
+        dev = await select_device()
+        return None if dev is None else await dev.connect(MONITOR_PORT)
+
+    try:
+        sock = asyncio.run(connect())
+    except Exception:  # shortcut: ไม่แยกชนิด error ทุกกรณีถือว่าแอปไม่มีพอร์ตนี้
+        sock = None
+    if sock is None:
+        log("แอปไม่มีปุ่มฟังเสียงตัวเอง (เวอร์ชันเก่า) ข้าม")
+        return
+    sock.setblocking(True)
+    socks.append(sock)  # ให้ session ปิดได้ตอนจบ
+    try:
+        while True:
+            b = sock.recv(1)
+            if not b:
+                break
+            on = b[-1] == 1
+            if on != mon.on:
+                mon.on = on
+                log(f"ฟังเสียงตัวเอง: {'เปิด' if on else 'ปิด'}")
+    except OSError:
+        pass
+    finally:
+        mon.on = False
+        sock.close()
+
+
+def session(args, jb, wav, mon=None):
     """หนึ่งรอบการเชื่อมต่อ คืน None = ลองใหม่, ตัวเลข = จบโปรแกรมด้วย exit code นั้น"""
     from pymobiledevice3.usbmux import select_device
 
@@ -165,6 +234,7 @@ def session(args, jb, wav):
     if sock is None:
         return None
     sock.setblocking(True)  # socket จาก asyncio เป็น non-blocking แต่ loop ด้านล่างอ่านแบบ blocking
+    mon_socks = []
     try:
         sock.settimeout(1.0)
         magic, ver, ch, rate, fmt, rsv = struct.unpack(HEADER_FMT, recv_exact(sock, HEADER_SIZE))
@@ -173,6 +243,8 @@ def session(args, jb, wav):
                   " — แอปบน iPad คนละเวอร์ชันกับตัวรับ ติดตั้งแอปใหม่")
             return 1
         log("header ถูกต้อง (IPMC v1, mono, 48000 Hz, Float32)")
+        if mon:
+            threading.Thread(target=watch_monitor, args=(args, mon, mon_socks), daemon=True).start()
 
         last_log = last_data = time.time()
         max_gap = 0.0
@@ -199,6 +271,8 @@ def session(args, jb, wav):
                     wav.writeframes((np.clip(x, -1, 1) * 32767).astype("<i2").tobytes())
                 if not args.no_play and len(x):
                     jb.push(x)
+                    if mon:
+                        mon.jb.push(x)
             elif now - last_data > NO_DATA_S:
                 log(f"ไม่มีข้อมูลเกิน {NO_DATA_S:.0f} วินาที")
                 return None
@@ -211,6 +285,8 @@ def session(args, jb, wav):
         log(f"การเชื่อมต่อหลุด ({e})")
         return None
     finally:
+        for s in mon_socks:  # ให้ thread อ่านพอร์ต 7779 จบไปพร้อม session
+            s.close()
         sock.close()
 
 
@@ -241,6 +317,34 @@ def take_over():
     threading.Thread(target=wait, daemon=True).start()
 
 
+def open_monitor(sd):
+    """เปิดหูฟังไว้เล่นเงียบรอ (กดปุ่มในแอปแล้วได้ยินทันที) เปิดไม่ได้ = ไม่มีฟังเสียงตัวเอง แต่ CABLE ยังทำงาน"""
+    devices = sd.query_devices()
+    idx = pick_monitor(sd.query_hostapis(), devices)
+    if idx is None:
+        log("ไม่พบหูฟัง/ลำโพงหลักที่ไม่ใช่ CABLE ปุ่มฟังเสียงตัวเองจะไม่มีเสียง")
+        return None, None
+    if is_bluetooth(devices, idx):
+        log("เตือน: หูฟังนี้เป็นบลูทูธ ดีเลย์ 100+ ms ฟังเสียงตัวเองจะช้าและเหมือนมีเสียงสะท้อน ใช้หูฟังสายจะเรียลไทม์กว่า")
+    mon = Monitor()
+
+    def cb(outdata, frames, t, status):
+        m = mon.fill(frames)
+        outdata[:, 0] = m
+        outdata[:, 1] = m
+
+    try:
+        # auto_convert: หูฟังบางตัวตั้ง 44.1 kHz ให้ Windows แปลงให้แทนการเปิดไม่ได้
+        s = sd.OutputStream(device=idx, samplerate=RATE, channels=2, dtype="float32", callback=cb,
+                            latency="low", extra_settings=sd.WasapiSettings(auto_convert=True))
+        s.start()
+    except Exception as e:
+        log(f"เปิดอุปกรณ์ฟังเสียงตัวเองไม่ได้ ({e}) ข้าม")
+        return None, None
+    log(f"ฟังเสียงตัวเองผ่าน: {sd.query_devices(idx)['name']} (เปิด/ปิดที่ปุ่มในแอป)")
+    return mon, s
+
+
 def run(args):
     import sounddevice as sd
 
@@ -254,7 +358,7 @@ def run(args):
             return 1
 
     jb = Jitter(args.buffer_ms)
-    wav = stream = None
+    wav = stream = mon = mon_stream = None
     try:
         if args.wav:
             wav = wave.open(args.wav, "wb")
@@ -278,22 +382,26 @@ def run(args):
             stream = sd.OutputStream(device=idx, samplerate=RATE, channels=2,
                                      dtype="float32", callback=cb, latency="low")
             stream.start()
+            mon, mon_stream = open_monitor(sd)
 
         while True:
-            code = session(args, jb, wav)
+            code = session(args, jb, wav, mon)
             if code is not None:
                 return code
             log("รอ iPad...")
             jb.reset()
+            if mon:
+                mon.jb.reset()
             time.sleep(1)
     except KeyboardInterrupt:
         print("\nหยุดโดยผู้ใช้")
         return 0
     finally:
         # ปิดให้เรียบร้อย ไม่งั้น header ของไฟล์ WAV จะไม่สมบูรณ์
-        if stream:
-            stream.stop()
-            stream.close()
+        for s in (stream, mon_stream):
+            if s:
+                s.stop()
+                s.close()
         if wav:
             wav.close()
 
