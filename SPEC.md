@@ -2,7 +2,7 @@
 
 ## เป้าหมาย
 iPad เป็นไมค์คุณภาพสูงสุดเท่าที่ไมค์ในตัวทำได้ ส่งให้ Windows ผ่าน USB-C
-หลักการ: ง่ายที่สุด แต่เสียงต้องไม่สะดุดและไม่ถูกประมวลผล
+หลักการ: ง่ายที่สุด (เสียบสาย → เปิดแอป → START), เสียงไม่สะดุด, latency ต่ำ
 - แอป iPad: Start/Stop + สถานะ + แถบระดับเสียง (ขึ้นสีแดงเมื่อใกล้ clip)
 - ต้องอัดต่อได้แม้ล็อกจอ
 - ใช้งาน: เสียบสาย → เปิดแอป → Start → เลือก "CABLE Output" ใน DAW
@@ -12,13 +12,14 @@ iPad เป็นไมค์คุณภาพสูงสุดเท่าท
 - iPadOS เป็น USB Audio Class ไม่ได้ → ต้องมีโปรแกรมฝั่ง Windows
 - WO Mic iOS = Wi-Fi เท่านั้น / AudioRelay ไม่รองรับ iOS / iVCam = เว็บแคม → สร้างเอง
 - Swift Playgrounds เปิด background audio ไม่ได้
-- ไม่มี Mac → build ด้วย GitHub Actions แบบไม่เซ็น → ติดตั้งด้วย Sideloadly + Apple ID ฟรี
+- ไม่มี Mac → build ด้วย GitHub Actions แบบไม่เซ็น → ติดตั้งด้วย AltServer + Apple ID ฟรี
+  (Sideloadly/iloader ล็อกอิน Apple ไม่ผ่านตั้งแต่ ก.ย. 2026 ดู [GUIDE ข้อ 8](docs/GUIDE.md#8-ทำไมใช้-altserver-ไม่ใช้-sideloadly--iloader))
   (หมดอายุทุก 7 วัน, ลงได้สูงสุด 3 แอป, สร้าง App ID ได้ 10 ตัวต่อ 7 วัน)
 - UIBackgroundModes = audio ใช้กับ Apple ID ฟรีได้
-- ต้องตรวจใน spike: Sideloadly ใช้กับแอป Apple Devices อย่างเดียวได้ไหม
+- ตรวจแล้วใน spike: AltServer ต้องใช้ iTunes + iCloud เวอร์ชันเว็บ (เวอร์ชัน Microsoft Store ใช้ไม่ได้)
 
 ## สถาปัตยกรรม
-iPad mic → AVAudioEngine (Float32 mono 48 kHz, mode .measurement = ไม่ประมวลผลเสียง)
+iPad mic → AVAudioEngine + AVAudioSinkNode (Float32 mono 48 kHz, mode .default ค่าเริ่มต้น / .measurement = โหมดดิบ)
 → TCP listener port 7777 (noDelay, ก้อนละประมาณ 10 ms)
 → usbmux (Apple Devices) → Python + pymobiledevice3
 → jitter buffer 30 ms + ชดเชย drift ด้วย np.interp
@@ -26,7 +27,8 @@ iPad mic → AVAudioEngine (Float32 mono 48 kHz, mode .measurement = ไม่�
 
 ## C1. แอป iPad (`ios/`)
 - SwiftUI, iPadOS 17+, ไม่มี dependency, ใช้ XcodeGen (`project.yml`)
-- AVAudioSession: .record + .measurement, preferredSampleRate 48000
+- AVAudioSession: .record + .default (ค่าเริ่มต้น มี auto gain) หรือ .measurement (โหมดดิบ เลือกในแอป), preferredSampleRate 48000
+  (เดิมบังคับ .measurement แต่ทดสอบจริง 2026-10-17 เสียงเบาและทึบ ดู LOG)
   ถ้าได้ rate อื่นให้แสดง error (ไม่ทำตัวแปลง)
 - ส่ง Float32 ตรงจาก inputNode tap แบบ mono
 - กด Start แล้ว engine รันตลอดจนกว่าจะกด Stop
@@ -57,7 +59,7 @@ iPad mic → AVAudioEngine (Float32 mono 48 kHz, mode .measurement = ไม่�
 ## C4. เอกสาร (ภาษาไทย)
 - README.md = ติดตั้งและใช้งาน มีคำสั่งจริงและผลที่ควรเห็น
   - Apple Devices, VB-Cable (ตั้ง 48 kHz ทั้ง Input และ Output, ปิด Audio enhancements)
-  - Sideloadly → Developer Mode → trust profile → "Trust This Computer"
+  - AltServer (iTunes + iCloud เวอร์ชันเว็บ) → Developer Mode → trust profile → "Trust This Computer"
   - ลงซ้ำทุก 7 วัน
   - คำแนะนำสำหรับร้องเพลง:
     - ห่างไมค์ 20–40 cm และหันขอบ iPad ด้านที่มีไมค์เข้าหาปาก
@@ -77,12 +79,12 @@ iPad mic → AVAudioEngine (Float32 mono 48 kHz, mode .measurement = ไม่�
 | 3 เอกสาร | README + LOG | ผู้ใช้ทำตาม README ได้จริง |
 
 ## หน้าที่ของผู้ใช้
-- สร้าง repo หรืออนุญาตให้ใช้ gh, ติดตั้งด้วย Sideloadly, อนุญาตไมค์
+- สร้าง repo หรืออนุญาตให้ใช้ gh, ติดตั้งด้วย AltServer, อนุญาตไมค์
 - ทดสอบแล้วส่ง log หรือไฟล์ WAV กลับมาเป็นหลักฐาน
 
 ## ความเสี่ยงที่ต้องเช็กใน spike
 - usbmux ต่อเข้า listener ได้ไหม (ลองทั้ง loopback และทุก interface)
-- driver ที่ต้องใช้กับ pymobiledevice3 และ Sideloadly
+- driver ที่ต้องใช้กับ pymobiledevice3 และ AltServer
 - iPad ได้ 48 kHz จริงไหม
 - แอปอื่นแย่งไมค์
 

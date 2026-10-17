@@ -9,3 +9,59 @@
   - jitter buffer เริ่ม 30 ms + ชดเชย clock drift ด้วย `np.interp`
   - repo บน GitHub: public, ชื่อ `ipad-usb-mic`, branch ทำงาน `dev`
 - ข้อสังเกต: ยังไม่พบ service ชื่อ "Apple Mobile Device Service" ด้วยการค้นแบบอ่านอย่างเดียว (แอป Apple Devices จาก Store อาจใช้ชื่ออื่น) → ตรวจในเฟส 1
+
+## 2026-10-17
+- สร้าง branch `dev` และโครงเฟส 1 ทั้งหมด (ดู [GUIDE บทที่ 1](docs/GUIDE.md#บทที่-1-เฟส-1-spike--ipad-ส่งเสียง-sine-440-hz-ผ่าน-usb))
+  - **ทำอะไร:** แอป iPad ส่ง sine 440 Hz (`ios/`), CI (`.github/workflows/build.yml`), ตัวรับ Python (`windows/spike_receiver.py`), GUIDE บทที่ 1
+  - **ทำไม:** พิสูจน์เส้นทาง iPad → usbmux → Python ก่อนใช้ไมค์จริง (เฟส 2)
+  - **ปัญหาที่เจอ:** (1) `project.yml` ในแผนมีบรรทัด `UIL` ถูกตัดค้าง (2) โค้ดส่วน timer/สร้างเสียงใน SineServer ในแผนถูกตัด (3) `py -3.11` ไม่มีในเครื่อง (มีแต่ Python 3.12.10)
+  - **วิธีแก้:** (1) ใช้ `UILaunchScreen: {}` (2) เขียนเองตามโปรโตคอล: timer 10 ms, phase ต่อเนื่อง, amplitude 0.5 (3) ตรวจ syntax ด้วย `py -3` แทน; แผน 4 ต้องติดตั้ง Python 3.11 ก่อน
+- ยังไม่ได้ตรวจ: CI ยังไม่ได้รัน, ยังไม่ได้ติดตั้ง `pymobiledevice3` จึงยังไม่ได้ตรวจ signature ของ `select_device` / `MuxDevice.connect` (ต้องตรวจในแผน 4 แล้วแก้ตามจริง), ยังไม่ได้ทดสอบกับ iPad
+- เติม Info.plist keys ที่ขาด (ดู [GUIDE บทที่ 1](docs/GUIDE.md))
+  - **ทำอะไร:** เติม `NSMicrophoneUsageDescription`, `NSLocalNetworkUsageDescription`, `UIBackgroundModes` ใน `ios/project.yml`
+  - **ทำไม:** ข้อความแผนถูกตัดตอนวาง ทำให้ key หาย
+  - **ปัญหาที่ป้องกัน:** แอป crash ตอนขอใช้ไมค์ / iOS อาจบล็อกการต่อจากคอม / เสียงหยุดตอนล็อกจอ
+  - **บทเรียน:** เก็บแผนเป็นไฟล์ใน repo (`docs/plans/`) แทนการวางข้อความ
+- ผลแผน 4 และ 5 (ดู [GUIDE บทที่ 1](docs/GUIDE.md))
+  - **ทำอะไร:** สร้าง `windows/.venv` (Python 3.11.15), ติดตั้ง requirements (pymobiledevice3 11.33.0, sounddevice 0.5.6, numpy 2.4.6), push `dev`, รัน CI
+  - **ผลตรวจ:** signature ตรงกับโค้ด: `select_device(udid=None, connection_type=None, usbmux_address=None)` และ `MuxDevice.connect(self, port, usbmux_address=None) -> socket`; `--list-devices` เจอ `CABLE Input (VB-Audio Virtual Cable)` บน WASAPI 48000 Hz
+  - **CI:** run 38947126453 ผ่าน (48 วินาที) ได้ `IpadMic.ipa` ขนาด 25010 byte มี warning เรื่อง Node.js 20 deprecated ของ actions/checkout@v4 และ upload-artifact@v4 (ยังไม่กระทบ)
+  - **ยังไม่ได้ตรวจ:** ติดตั้งลง iPad, การต่อผ่าน usbmux จริง, WAV 440 Hz
+- เปลี่ยนเครื่องมือ sideload เป็น AltServer (ดู [GUIDE ข้อ 8](docs/GUIDE.md#8-ทำไมใช้-altserver-ไม่ใช้-sideloadly--iloader))
+  - **ทำอะไร:** ถอน iTunes เวอร์ชัน Store, ลง iTunes 12.13.11.1 จากเว็บ Apple, ลง AltServer แล้วติดตั้ง `IpadMic.ipa` ลง iPad สำเร็จ แอปเปิดได้
+  - **ทำไม:** Sideloadly และ iloader ล็อกอิน Apple ไม่ผ่าน (grandslam 503, anisette 502, -45025) นานกว่า 12 ชั่วโมง เพราะ Apple บล็อกตัวระบุ Xcode
+  - **แก้เอกสาร:** GUIDE ข้อ 5.3 และ 8, `docs/plans/phase1-next.md`, คอมเมนต์ `build.yml`
+  - **ยังไม่ได้ตรวจ:** การต่อผ่าน usbmux จริง, WAV 440 Hz; การที่ไม่พบ service "Apple Mobile Device" ยังไม่ได้แก้ แต่ AltServer เห็น iPad แล้ว
+- เฟส 1 ผ่าน: iPad → usbmux → Python ได้ WAV 440 Hz (GUIDE ข้อ 5.5-5.6)
+  - **ปัญหาที่เจอ:** (1) `AttributeError: 'coroutine' object has no attribute 'connect'` (2) `BlockingIOError: [WinError 10035]` ตอนอ่าน header
+  - **สาเหตุ:** (1) pymobiledevice3 11.33.0 ทำ `select_device` / `MuxDevice.connect` เป็น async (ตอนตรวจ signature ครั้งก่อนดูแค่ชื่อพารามิเตอร์) (2) socket ที่ได้กลับมาเป็น non-blocking
+  - **วิธีแก้:** `spike_receiver.py` เรียกผ่าน `asyncio.run()` แล้ว `sock.setblocking(True)`
+  - **ผลตรวจ:** `header ถูกต้อง (IPMC v1, mono, 48000 Hz, Float32)`, สะดุด 0 / ล้น 0 ครั้ง (โหมด `--no-play`), WAV 21.39 วินาที (1026720 frame), `--check` ได้ `พบความถี่หลัก 440.0 Hz` / `ผ่าน`
+  - **แก้เอกสาร:** SPEC.md เปลี่ยน Sideloadly เป็น AltServer, หมายเหตุใน GUIDE ข้อ 5
+  - **ยังไม่ได้ตรวจ:** การเล่นออก VB-Cable (ไม่ใส่ `--no-play`), WAV จาก CABLE Output, `bindLoopbackOnly` แบบ loopback (ตอนนี้ค่าเริ่มต้นใช้ได้)
+- วางแผนเฟส 2 (ไมค์จริง) เป็นไฟล์ [docs/plans/phase2.md](docs/plans/phase2.md)
+  - **ทำอะไร:** แบ่งเป็นแผน 2.1 ตัวรับ Windows, 2.2 แอป iPad, 2.3 push + CI, 2.4 ทดสอบจริง T1-T4, 2.5 เอกสาร
+  - **ความเสี่ยงหลัก:** tap ของ AVAudioEngine อาจส่งก้อนใหญ่กว่า 20 ms จน buffer 30 ms สะดุด (วัดในแผน 2.4)
+- แผน 2.1 ตัวรับ Windows (ดู [docs/plans/phase2.md](docs/plans/phase2.md))
+  - **ทำอะไร:** เปลี่ยน `spike_receiver.py` เป็น `receiver.py`, ชดเชย drift ด้วย P controller + `np.interp`, ต่อ iPad ใหม่เองเมื่อหลุดหรือเงียบเกิน 3 วินาที, log เพิ่ม drift (ppm) และก้อนใหญ่สุด, เพิ่ม `start.bat` และ `test_receiver.py`
+  - **ผลตรวจ:** unittest 3 ข้อผ่าน (จำลอง 10 นาที ±100 ppm: สะดุด 0, buffer เฉลี่ย 31.5 ms, ppm เข้าที่ ~100; sine 1 kHz ไม่เพี้ยน ไม่มีคลิก), `--check` ได้ 440.0 Hz, รันโดยไม่เสียบ iPad เห็น `รอ iPad...` ทุก 1 วินาที
+  - **ปัญหาที่เจอ:** log ภาษาไทย crash เมื่อ redirect stdout (cp1252) แก้ด้วย `sys.stdout.reconfigure(encoding="utf-8")`; ppm ในหน้าต่าง 1 นาทีแกว่งตามเฟสของก้อน (วัดได้ 66 แทน 100) ทั้งที่ยาว ๆ เข้าที่ 100 จึงให้ test เฉลี่ย 5 นาที
+  - **ยังไม่ได้ตรวจ:** กับ iPad และ WASAPI จริง (ทำในแผน 2.4)
+- แผน 2.2 แอป iPad ใช้ไมค์จริง (ดู [docs/plans/phase2.md](docs/plans/phase2.md))
+  - **ทำอะไร:** เปลี่ยน `SineServer.swift` เป็น `MicServer.swift` (AVAudioEngine + tap channel 0, session `.record`/`.measurement` 48 kHz, ขอสิทธิ์ไมค์, interruption/route change → `Interrupted`, error ถ้าไม่ได้ 48 kHz), UI เพิ่มแถบระดับเสียง (แดงที่ -3 dBFS) และแสดงขนาดก้อนจริง
+  - **ยังไม่ได้ตรวจ:** ยังไม่ได้ compile (ไม่มี Mac ต้องรอ CI ในแผน 2.3), ขนาดก้อนจริงของ tap (ความเสี่ยง R1), พฤติกรรมตอนล็อกจอ
+- ผลทดสอบแอปไมค์ครั้งแรก + แผน 2.2b
+  - **ปัญหาที่เจอ:** จอแสดง "ก้อนละ 100 ms" ค้าง (ความเสี่ยง R1 เกิดจริง) `installTap` ไม่ทำตาม `bufferSize: 480`
+  - **วิธีแก้:** เปลี่ยนเป็น `AVAudioSinkNode` (ได้ก้อนตาม IO buffer ที่ขอ 5 ms), ตัวรับเปิด WASAPI แบบ `latency="low"`
+  - **ยังไม่ได้ตรวจ:** ขนาดก้อนจริงของ sink node บน iPad
+- ผลทดสอบ sink node + แผน 2.6 (ใช้ง่าย + เสียง)
+  - **ผลตรวจ:** ก้อนใหญ่สุด 7-9 ms (เดิม 100 ms), buffer 22-33 ms, drift เข้าที่ -2 ppm, เสียบสายใหม่แล้วกลับมาเอง (ผู้ใช้รายงาน); สะดุด 1523 / ล้น 7 เกิดใน 10 วินาทีแรกเท่านั้น ยังไม่รู้สาเหตุ
+  - **ปัญหาที่เจอ:** (1) เปิด `start.bat` สองตัวแย่งกันต่อสลับทุก 1 วินาที แล้วตัวหนึ่ง crash ด้วย `ConnectionError` ตอนอ่าน header (2) โหมด `.measurement` เสียงเบาและทึบเมื่อเทียบกับแอปอัดเสียงของ iPad
+  - **วิธีแก้:** (1) ดัก `OSError` ทั้ง session ให้ต่อใหม่, ตัวรับตัวใหม่สั่งตัวเก่าปิดผ่าน localhost:7778, `start.bat` ค้างหน้าต่างเฉพาะตอน error (2) ค่าเริ่มต้นเป็น `.default` มีปุ่ม "มาตรฐาน / ดิบ" ในแอป (จำค่าไว้), แก้ SPEC ตาม
+  - **ตัดสินใจ:** ผู้ใช้ต้องการใช้ง่ายที่สุด ห้ามแก้ด้วย option ที่ต้องพิมพ์ (ปฏิเสธ `--gain`)
+  - **ผลตรวจ Windows:** เปิดตัวที่สองแล้วตัวแรก log `มีตัวรับตัวใหม่เปิดขึ้น ปิดตัวนี้` และจบด้วย exit 0, unittest ยังผ่าน
+  - **ยังไม่ได้ตรวจ:** เสียงโหมดมาตรฐาน (pumping กับกีตาร์?), ได้ 48 kHz ในโหมดมาตรฐานไหม
+- แผน 2.7 ตัวเลื่อนความดัง + ปิดไมค์ (แอป iPad)
+  - **ทำอะไร:** เพิ่มตัวเลื่อน -24..+12 dB และปุ่มเปิด/ปิดไมค์ (ปิด = ส่งเสียงเงียบ ไม่ตัดสาย ตัวรับไม่ต้องต่อใหม่) จำค่าไว้ข้ามการเปิดแอป; แถบระดับเสียงวัดหลังปรับ gain และ clip ที่ ±1; เขียน [docs/plans/next.md](docs/plans/next.md) สำหรับส่งต่องาน
+  - **ผลตรวจ:** CI compile ผ่าน (ดูด้านล่าง)
+  - **ยังไม่ได้ตรวจ:** พฤติกรรมบน iPad จริง, ผล T1/T2/T4; เก็บ limiter และไฟแดงค้างไว้รอบหน้าตามที่ผู้ใช้สั่ง
