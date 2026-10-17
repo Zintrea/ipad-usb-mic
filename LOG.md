@@ -79,3 +79,7 @@
   - **ผลตรวจ:** CI run 39054082585 ผ่าน ได้ `build\ci6\IpadMic-ipa\IpadMic.ipa` (50015 byte); ผู้ใช้ทดสอบบน iPad แล้วแจ้งว่าผ่าน
   - **ทำอะไร:** `git merge --ff-only feat/limiter` เข้า `dev`
   - **ตัดสินใจ:** ผู้ใช้ย้าย `feat/iphone` ไปทำท้ายสุด ฟีเจอร์ถัดไปคือ `feat/eq-reverb`
+- feat/eq-reverb (เฟส 4 A1, ดู [docs/plans/phase4.md](docs/plans/phase4.md))
+  - **ทำอะไร:** `Dsp.swift` = biquad high-pass + peaking 4 kHz และ reverb แบบ Freeverb (เขียนเอง ไม่ใช้ AVAudioUnitReverb เพื่อให้ลำดับ ตัดเสียงรบกวน → gain → EQ → reverb → limiter อยู่ใน `handle()` ที่เดียว); หน้าหลักเลือก ไม่ก้อง/ห้อง/ฮอลล์; หน้าตั้งค่า EQ เปิด/ปิด, ตัดเสียงต่ำ 60-200 Hz, ความใส 0-6 dB, ปริมาณก้อง 0-50%; ปิดไมค์ตัดหลัง reverb จึงเงียบทันที
+  - **ผลตรวจ:** port สูตรเป็น Python (scratchpad, ไม่ได้ commit): high-pass 100 Hz ได้ -3.0 dB ที่ 100 Hz / -12.3 dB ที่ 50 Hz, peaking +3.0 dB ที่ 4 kHz; reverb ห้อง RT60 1.17 s ฮอลล์ 2.88 s หางลดจนหายไม่ป่วน
+  - **ยังไม่ได้ตรวจ:** เสียงจริงบน iPad (รอผู้ใช้ทดสอบ ci9)
