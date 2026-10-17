@@ -42,3 +42,8 @@
 - วางแผนเฟส 2 (ไมค์จริง) เป็นไฟล์ [docs/plans/phase2.md](docs/plans/phase2.md)
   - **ทำอะไร:** แบ่งเป็นแผน 2.1 ตัวรับ Windows, 2.2 แอป iPad, 2.3 push + CI, 2.4 ทดสอบจริง T1-T4, 2.5 เอกสาร
   - **ความเสี่ยงหลัก:** tap ของ AVAudioEngine อาจส่งก้อนใหญ่กว่า 20 ms จน buffer 30 ms สะดุด (วัดในแผน 2.4)
+- แผน 2.1 ตัวรับ Windows (ดู [docs/plans/phase2.md](docs/plans/phase2.md))
+  - **ทำอะไร:** เปลี่ยน `spike_receiver.py` เป็น `receiver.py`, ชดเชย drift ด้วย P controller + `np.interp`, ต่อ iPad ใหม่เองเมื่อหลุดหรือเงียบเกิน 3 วินาที, log เพิ่ม drift (ppm) และก้อนใหญ่สุด, เพิ่ม `start.bat` และ `test_receiver.py`
+  - **ผลตรวจ:** unittest 3 ข้อผ่าน (จำลอง 10 นาที ±100 ppm: สะดุด 0, buffer เฉลี่ย 31.5 ms, ppm เข้าที่ ~100; sine 1 kHz ไม่เพี้ยน ไม่มีคลิก), `--check` ได้ 440.0 Hz, รันโดยไม่เสียบ iPad เห็น `รอ iPad...` ทุก 1 วินาที
+  - **ปัญหาที่เจอ:** log ภาษาไทย crash เมื่อ redirect stdout (cp1252) แก้ด้วย `sys.stdout.reconfigure(encoding="utf-8")`; ppm ในหน้าต่าง 1 นาทีแกว่งตามเฟสของก้อน (วัดได้ 66 แทน 100) ทั้งที่ยาว ๆ เข้าที่ 100 จึงให้ test เฉลี่ย 5 นาที
+  - **ยังไม่ได้ตรวจ:** กับ iPad และ WASAPI จริง (ทำในแผน 2.4)
