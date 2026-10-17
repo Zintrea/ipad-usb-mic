@@ -16,6 +16,7 @@ Repo: `C:\Host\02 Projects\13 Ipadmic`, branch `dev` · กฎการทำง
 - `feat/noise-profile`: เรียนเสียงรอบข้าง 3 วินาที (ผู้ใช้อยู่นิ่ง) ลบแบบจำกัดความลึก เริ่ม ~10 dB; เสียงรบกวนจริงคือพัดลม แอร์ รถ ถนน (เสียงรถวิ่งผ่านลบไม่ได้)
 - `feat/pc-monitor`: ผู้ใช้เลือกทาง ข. = ปุ่มเปิด/ปิดฟังเสียงตัวเองในแอป ต้องเพิ่มช่องส่งคำสั่งจากแอปไปตัวรับ (ใช้ model opus ตอนเริ่ม)
 - `feat/limiter` ผู้ใช้ทดสอบ ipa `build\ci6` ผ่าน, merge เข้า `dev` แล้ว ดู [LOG.md](../../LOG.md)
+- เฟส 4 ([phase4.md](phase4.md)) เขียนครบแล้วเป็น branch ต่อชั้น `feat/eq-reverb` → `feat/noise-profile` → `feat/pc-monitor` ipa อยู่ `build\ci7`, `build\ci8`, `build\ci9` (ci9 = ครบทุกอย่าง) รอผู้ใช้ทดสอบ ci9 แล้วค่อย merge ทั้ง 3 เข้า `dev`
 - แผนแยกที่ยังไม่ทำ: shortcut `start.bat` ใน Startup ของ Windows
 
 ## ค้างจากเกณฑ์เฟส 2 (SPEC)

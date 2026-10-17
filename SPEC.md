@@ -24,6 +24,7 @@ iPad mic → AVAudioEngine + AVAudioSinkNode (Float32 mono 48 kHz, mode .default
 → usbmux (Apple Devices) → Python + pymobiledevice3
 → jitter buffer 30 ms + ชดเชย drift ด้วย np.interp
 → sounddevice (WASAPI) → "CABLE Input" → DAW เลือก "CABLE Output"
+(ฟังเสียงตัวเอง: แอปพอร์ต 7779 ส่ง 1 byte เปิด/ปิด → ตัวรับเล่นออกอุปกรณ์เสียงหลักผ่าน buffer 10 ms)
 
 ## C1. แอป iPad (`ios/`)
 - SwiftUI, iPadOS 17+, ไม่มี dependency, ใช้ XcodeGen (`project.yml`)
