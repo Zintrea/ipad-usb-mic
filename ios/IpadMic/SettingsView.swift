@@ -4,7 +4,7 @@ import SwiftUI
 struct SettingsView: View {
     let running: Bool
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("rawMode") private var raw = false
+    @AppStorage("micMode") private var micMode = 0
     @AppStorage("limiterOn") private var limiterOn = true
     @AppStorage("ceilingDB") private var ceilingDB = -1.0
     @AppStorage("eqOn") private var eqOn = true
@@ -103,14 +103,15 @@ struct SettingsView: View {
                     Text("ผสมเสียงก้องมากน้อยแค่ไหน (เลือกแบบห้อง/ฮอลล์ที่หน้าหลัก) มากไปเสียงจะจมและฟังคำไม่ชัด ค่าเริ่มต้น 20%")
                 }
                 Section {
-                    Picker("โหมดเสียง", selection: $raw) {
-                        Text("มาตรฐาน").tag(false)
-                        Text("ดิบ").tag(true)
+                    Picker("โหมดเสียง", selection: $micMode) {
+                        Text("มาตรฐาน").tag(0)
+                        Text("ดิบ").tag(1)
+                        Text("Apple").tag(2)
                     }
                     .pickerStyle(.segmented)
                     .disabled(running)
                 } footer: {
-                    Text("มาตรฐาน: iPad ปรับความดังและแต่งเสียงให้เอง เสียงเต็มและดังกว่า (แนะนำ) ดิบ: ไม่แต่งเสียงเลย แต่เบาและทึบ ใช้เทียบเสียงเท่านั้น เปลี่ยนได้ตอนหยุดอยู่เท่านั้น")
+                    Text("มาตรฐาน: iPad ปรับความดังและแต่งเสียงให้เอง เสียงเต็มและดังกว่า (แนะนำ) ดิบ: ไม่แต่งเสียงเลย แต่เบาและทึบ ใช้เทียบเสียงเท่านั้น Apple: ใช้ตัวตัดเสียงรบกวนของ Apple แทนของแอป (ทำมาเพื่อเสียงพูด เสียงร้องลากยาวอาจเบาลง) เปลี่ยนได้ตอนหยุดอยู่เท่านั้น")
                 }
                 Section {
                     Button("คืนค่าเริ่มต้น", role: .destructive) {
@@ -124,7 +125,7 @@ struct SettingsView: View {
                         noiseLearnSec = 30
                         noiseSens = 2
                         if !running { noiseFFT = 4096 }
-                        if !running { raw = false }
+                        if !running { micMode = 0 }
                     }
                 }
             }

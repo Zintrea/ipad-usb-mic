@@ -13,10 +13,12 @@ Repo: `C:\Host\02 Projects\13 Ipadmic` · กฎการทำงานดู C
 | `feat/eq-reverb` | EQ เสียงร้อง + reverb ห้อง/ฮอลล์ (Freeverb เขียนเอง) | `build\ci7` |
 | `feat/noise-profile` | ตัดเสียงรบกวนแบบเรียนเสียงรอบข้าง (FFT 512) | `build\ci8` |
 | `feat/pc-monitor` | ปุ่มฟังเสียงตัวเองที่คอม (พอร์ต 7779) | `build\ci9` |
-| `feat/noise-tune` (ปัจจุบัน) | FFT 1024/4096/16384, profile = เฉลี่ย + ไว × ส่วนเบี่ยงเบน, เวลาเรียน 3-60 วินาที, ลึกถึง 30 dB, ตัวรับเตือนหูฟังบลูทูธ | `build\ci10` (ครบทุกอย่าง) |
+| `feat/noise-tune` | FFT 1024/4096/16384, profile = เฉลี่ย + ไว × ส่วนเบี่ยงเบน, เวลาเรียน 3-60 วินาที, ลึกถึง 30 dB, ตัวรับเตือนหูฟังบลูทูธ | `build\ci10` (ครบทุกอย่าง) |
+| `feat/voice-processing` (ปัจจุบัน) | โหมดเสียง "Apple" (voice processing) ข้ามตัวตัดเสียงของแอปอัตโนมัติ ยังไม่ push | ยังไม่ build |
 | `feat/iphone` | `TARGETED_DEVICE_FAMILY "1,2"` commit แล้ว **ยังไม่ push** แตกจาก `dev` เก่า ต้องเอา `dev` ใหม่เข้าไปก่อน | ยังไม่ build |
 
 ## งานที่ค้าง (เรียงตามที่ผู้ใช้ต้องการ)
+0. **เสียงแย่กว่า WO Mic** (2026-10-22: แตก/ในน้ำ, ทึบ, แบน) push + CI `feat/voice-processing` ให้ผู้ใช้ลองโหมด Apple และลองปิดตัดเสียงใน ci10 ถ้าโหมด Apple ดีกว่า/ปิดตัดเสียงดีกว่า → พิจารณาเปลี่ยนค่าเริ่มต้น (ถามผู้ใช้ก่อน)
 1. **ตัดเสียงรบกวนยังสู้ OBS ไม่ได้** (ผู้ใช้ทดสอบ ci10 แล้วบอก) รอไฟล์เทียบเป็น `.m4a`: ไฟล์ดิบ / จากแอป (ระบุ ci และค่าที่ตั้ง) / จาก OBS ReaFIR ผู้ใช้จะบอกพาธ แล้ววิเคราะห์ตามหัวข้อ "วิเคราะห์ไฟล์เทียบ" ด้านล่าง จากนั้นปรับอัลกอริทึม
 2. merge `feat/eq-reverb` → `feat/noise-profile` → `feat/pc-monitor` → `feat/noise-tune` เข้า `dev` หลังผู้ใช้ทดสอบผ่าน (merge/push เป็นแผนแยก)
 3. **ไอคอนแอปเป็นหน้าขาว**: `ios/` ไม่มี asset catalog ผู้ใช้เลือกลาย "ไมค์ขาวพร้อมคลื่นเสียง" แผน: `ios/tools/make_icon.py` (Pillow ในเครื่องมี) วาด 1024x1024 ไม่โปร่งใส → `Assets.xcassets/AppIcon.appiconset` + `ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon` ใน `project.yml` ผู้ใช้สั่งให้ทำหลังทดสอบฟีเจอร์เสียงและ merge (branch `feat/app-icon` จาก `dev`)

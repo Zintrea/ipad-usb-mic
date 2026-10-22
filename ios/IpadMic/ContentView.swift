@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var server: MicServer
-    @AppStorage("rawMode") private var raw = false   // จำค่าข้ามการเปิดแอป
+    @AppStorage("micMode") private var micMode = 0   // จำค่าข้ามการเปิดแอป
     @AppStorage("gainDB") private var gainDB = 0.0
     @AppStorage("muted") private var muted = false
     @AppStorage("limiterOn") private var limiterOn = true
@@ -21,6 +21,7 @@ struct ContentView: View {
     @State private var monitor = false   // ไม่จำค่า: เปิดแอปใหม่ปิดเสมอ กันเสียงหอนถ้าลืมถอดหูฟังแล้วเปิดลำโพง
 
     private var noiseHint: String {
+        if micMode == 2 { return "โหมด Apple ตัดเสียงรบกวนให้แล้ว ตัวนี้จึงปิดไว้ (เปลี่ยนโหมดในตั้งค่า)" }
         if server.noiseLearning {
             return String(format: "กำลังเรียนเสียงรอบข้าง %.0f วินาที: ไม่พูดไม่ร้อง ขยับตัว/หายใจ/ลากเก้าอี้ได้ตามปกติ", noiseLearnSec)
         }
@@ -34,7 +35,8 @@ struct ContentView: View {
         server.setLimiter(on: limiterOn, ceilingDB: ceilingDB)
         server.setEQ(on: eqOn, lowCutHz: lowCutHz, presenceDB: presenceDB)
         server.setReverb(preset: reverbPreset, mix: reverbMix)
-        server.setNoise(on: noiseOn, depthDB: noiseDepthDB, sensitivity: noiseSens)
+        server.setNoise(on: noiseOn && micMode != 2,   // โหมด Apple ตัดเสียงให้แล้ว ตัดซ้ำจะทึบ
+                         depthDB: noiseDepthDB, sensitivity: noiseSens)
         server.setMonitor(monitor)
     }
 
@@ -116,9 +118,10 @@ struct ContentView: View {
             VStack(spacing: 8) {
                 HStack {
                     Toggle("ตัดเสียงรบกวน", isOn: $noiseOn)
+                        .disabled(micMode == 2)
                     Button("เรียนเสียงรอบข้าง") { server.learnNoise(seconds: noiseLearnSec) }
                         .buttonStyle(.bordered)
-                        .disabled(!running || server.noiseLearning)
+                        .disabled(!running || server.noiseLearning || micMode == 2)
                 }
                 Text(noiseHint).font(.footnote).foregroundStyle(.secondary)
             }
@@ -138,7 +141,7 @@ struct ContentView: View {
             .tint(muted ? .orange : .green)
 
             Button {
-                if running { server.stop() } else { server.start(raw: raw, fft: noiseFFT) }
+                if running { server.stop() } else { server.start(mode: micMode, fft: noiseFFT) }
             } label: {
                 Text(running ? "STOP" : "START")
                     .font(.system(size: 36, weight: .bold))
@@ -164,6 +167,7 @@ struct ContentView: View {
         .onChange(of: reverbPreset) { applyAudio() }
         .onChange(of: reverbMix) { applyAudio() }
         .onChange(of: noiseOn) { applyAudio() }
+        .onChange(of: micMode) { applyAudio() }
         .onChange(of: noiseDepthDB) { applyAudio() }
         .onChange(of: noiseSens) { applyAudio() }
         .onChange(of: monitor) { applyAudio() }

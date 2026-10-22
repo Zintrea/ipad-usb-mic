@@ -138,17 +138,17 @@ final class MicServer: ObservableObject {
 
     // MARK: - start / stop
 
-    /// raw = true: .measurement (ไม่มี auto gain/แต่งเสียง) ทดสอบจริงแล้วเบาและทึบ จึงไม่ใช่ค่าเริ่มต้น
-    func start(raw: Bool, fft: Int) {
+    /// mode 0 = .default (ค่าเริ่มต้น), 1 = .measurement ดิบ (ทดสอบจริงแล้วเบาและทึบ), 2 = Apple voice processing
+    func start(mode: Int, fft: Int) {
         AVAudioApplication.requestRecordPermission { [weak self] granted in
             guard let self = self else { return }
             self.queue.async {
-                if granted { self.startOnQueue(raw: raw, fft: fft) } else { self.setState(.error("ไม่ได้รับอนุญาตใช้ไมค์")) }
+                if granted { self.startOnQueue(mode: mode, fft: fft) } else { self.setState(.error("ไม่ได้รับอนุญาตใช้ไมค์")) }
             }
         }
     }
 
-    private func startOnQueue(raw: Bool, fft: Int) {
+    private func startOnQueue(mode: Int, fft: Int) {
         guard listener == nil else { return }
         // สร้างใหม่ตอนที่ engine ยังไม่รัน เธรดเสียงจึงไม่แตะ reference นี้ขณะเปลี่ยน
         if fft != noise.size {
@@ -157,7 +157,7 @@ final class MicServer: ObservableObject {
             DispatchQueue.main.async { self.hasNoiseProfile = has }
         }
         do {
-            try startEngine(raw: raw)
+            try startEngine(mode: mode)
             try startListener()
             setState(.waiting)
         } catch let e as MicError {
@@ -169,10 +169,14 @@ final class MicServer: ObservableObject {
         }
     }
 
-    /// AVAudioSession .record (โหมดมาตรฐานหรือดิบ) แล้วต่อ sink node จาก inputNode
-    private func startEngine(raw: Bool) throws {
+    /// AVAudioSession ตามโหมด แล้วต่อ sink node จาก inputNode
+    private func startEngine(mode: Int) throws {
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.record, mode: raw ? .measurement : .default)
+        switch mode {
+        case 1: try session.setCategory(.record, mode: .measurement)
+        case 2: try session.setCategory(.playAndRecord, mode: .voiceChat)   // voice processing ต้องใช้ playAndRecord
+        default: try session.setCategory(.record, mode: .default)
+        }
         try session.setPreferredSampleRate(sampleRate)
         try session.setPreferredIOBufferDuration(0.005)
         try session.setActive(true)
@@ -180,6 +184,8 @@ final class MicServer: ObservableObject {
             throw MicError(message: "iPad ให้ \(Int(session.sampleRate)) Hz ไม่ใช่ 48000")
         }
         let input = engine.inputNode
+        // ตั้งทุกครั้งเพราะค่าค้างอยู่กับ inputNode ข้ามการกด Start ต้องตั้งก่อนอ่าน format
+        try input.setVoiceProcessingEnabled(mode == 2)
         let format = input.outputFormat(forBus: 0)
         guard format.sampleRate == sampleRate else {
             throw MicError(message: "ไมค์ให้ \(Int(format.sampleRate)) Hz ไม่ใช่ 48000")
