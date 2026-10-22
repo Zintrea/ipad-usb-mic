@@ -1,6 +1,6 @@
 import Foundation
 
-/// Limiter แบบมอง 1 ms ล่วงหน้า: หรี่เสียงลงก่อนที่ peak จะมาถึงเพดาน แล้วค่อยคืนระดับใน ~100 ms
+/// Limiter แบบมอง 1 ms ล่วงหน้า: หรี่เสียงลงก่อนที่ peak จะมาถึงเพดาน แล้วค่อยคืนระดับตาม releaseMs (ค่าเริ่มต้น 100 ms)
 /// ดีเลย์คงที่ 1 ms ตลอด (แม้ปิดอยู่) เพื่อไม่ให้เกิดเสียงคลิกตอนสลับเปิด/ปิด
 /// ไม่ผูกกับ AVFoundation และไม่จองหน่วยความจำตอนทำงาน เรียกจากเธรดเสียงได้
 final class Limiter {
@@ -17,7 +17,8 @@ final class Limiter {
     // shortcut: attack แบบ exponential ไม่การันตีว่าถึงเพดานพอดีใน 1 ms (เหลือเกินไม่ถึง 1%)
     // ส่วนที่เกินถูกดูดซับด้วยช่องว่างระหว่างเพดานกับ ±1 ที่ MicServer ตัดซ้ำ; ถ้าต้องเป๊ะให้ใช้ ramp เชิงเส้น
     private let attack: Float = 0.1
-    private let release: Float = 1 - exp(-1 / (0.1 * 48000))
+    private var release: Float = 1 - exp(-1 / (0.1 * 48000))
+    func setRelease(ms: Double) { release = Float(1 - exp(-1 / (ms / 1000 * 48000))) }
 
     func process(_ x: Float) -> Float {
         let a = abs(x)
