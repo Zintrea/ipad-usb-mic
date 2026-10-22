@@ -107,3 +107,11 @@
   - **ยังไม่ได้ตรวจ:** compile บน CI, ทดสอบบน iPad (voice processing อาจไม่ได้ 48 kHz → แอปขึ้น error, อาจลดเสียงร้องลากยาว)
 - research การปรับเสียง (พูด / ร้อง+กีต้าร์ / violin / ซอด้วง): EQ, dynamics, noise reduction, reverb → [docs/AUDIO_RESEARCH.md](docs/AUDIO_RESEARCH.md) + เพิ่ม `CLAUDE.md` ชี้ไฟล์อ้างอิง
   - **ยังไม่ได้ตรวจ:** ไม่พบงานวัดสเปกตรัมซอด้วง (อนุมานจาก erhu), ตาราง preset ต้องอัดเทียบบน iPad จริง
+
+
+## 2026-10-23
+- `feat/voice-processing`: ปรับแอปตาม [docs/AUDIO_RESEARCH.md](docs/AUDIO_RESEARCH.md) (วิธีทดสอบ: [GUIDE ข้อ 9](docs/GUIDE.md))
+  - **ทำอะไร:** แหล่งเสียง 4 แบบ (พูด / ร้อง+กีตาร์ / ไวโอลิน / ซอด้วง) จำค่าแยกกันใน `Tones.swift` (UserDefaults `tones`, `source`); EQ เพิ่มลดอู้ 300 Hz, เลือกย่านความใส 2.5-5 kHz (ติดลบได้), ตัดแหลม (low-pass); compressor soft knee + ชดเชยระดับอัตโนมัติ; reverb มี pre-delay และตัดต่ำในหางก้อง 180 Hz; release ของ limiter ตามแหล่ง
+  - **หน้าจอ:** หน้าหลักเหลือ สถานะ/แถบระดับ, ชื่อแหล่งเสียง, สถานะตัดเสียงรบกวน, ความดัง, ฟังเสียงตัวเอง + ดีเลย์เป็นภาษาคน, ปิดไมค์, START/STOP; ที่เหลือย้ายไปหน้าตั้งค่าแบ่งหมวด
+  - **ตัดสินใจ:** ซอด้วงยึดค่าไวโอลิน (ผู้ใช้บอกว่าฟังคล้ายไวโอลินมากกว่าซอเอ้อหู); ค่าเก่า `lowCutHz`/`presenceDB`/`reverbPreset`/`reverbMix`/`noiseDepthDB` เลิกใช้ ทุกแหล่งเริ่มจากค่าตั้งต้นใหม่
+  - **ยังไม่ได้ตรวจ:** compile (Windows build iOS ไม่ได้, ยังไม่ได้ push ให้ CI), ทดสอบบน iPad, threshold compressor -20 dB และ makeup อัตโนมัติยังไม่ได้วัดกับระดับเสียงจริง

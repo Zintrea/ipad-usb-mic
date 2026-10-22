@@ -11,7 +11,7 @@ tagged:
 - **[I]** = my inference / engineering judgment, not directly sourced
 - **[U]** = unverified, needs on-device measurement
 
-Current app chain (from `MicServer.swift`): `noise reducer -> gain -> low-cut HPF -> presence peak (4 kHz) -> reverb (Freeverb room/hall) -> lookahead limiter (1 ms, ~100 ms release, -1 dBFS ceiling)`, Float32 mono 48 kHz.
+Current app chain (from `MicServer.swift`, since 2026-10-23): `noise reducer -> gain -> low-cut HPF -> mud peak (300 Hz) -> presence peak (2.5-5 kHz) -> high-cut LPF -> compressor (soft knee) -> reverb (Freeverb room/hall, pre-delay, wet HPF 180 Hz) -> lookahead limiter (1 ms, per-source release, -1 dBFS ceiling)`, Float32 mono 48 kHz. Per-source defaults (section 7) live in `Tones.swift`.
 
 ---
 

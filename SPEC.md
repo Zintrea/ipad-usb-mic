@@ -31,7 +31,7 @@ iPad mic → AVAudioEngine + AVAudioSinkNode (Float32 mono 48 kHz, mode .default
 - AVAudioSession: .record + .default (ค่าเริ่มต้น มี auto gain) หรือ .measurement (โหมดดิบ เลือกในแอป), preferredSampleRate 48000
   (เดิมบังคับ .measurement แต่ทดสอบจริง 2026-10-17 เสียงเบาและทึบ ดู LOG)
   ถ้าได้ rate อื่นให้แสดง error (ไม่ทำตัวแปลง)
-- ส่ง Float32 mono จาก AVAudioSinkNode ผ่านลำดับ ตัดเสียงรบกวน → gain → EQ → reverb → limiter (ดู [phase4.md](docs/plans/phase4.md))
+- ส่ง Float32 mono จาก AVAudioSinkNode ผ่านลำดับ ตัดเสียงรบกวน → gain → EQ (ตัดต่ำ, ลดอู้, ความใส, ตัดแหลม) → compressor → reverb (pre-delay) → limiter ค่าแยกตามแหล่งเสียง (ดู [phase4.md](docs/plans/phase4.md), [AUDIO_RESEARCH.md](docs/AUDIO_RESEARCH.md))
 - กด Start แล้ว engine รันตลอดจนกว่าจะกด Stop
   ถ้ายังไม่มี client ให้ทิ้ง sample ไป เพื่อไม่ให้แอปถูก suspend ตอนล็อกจอ
 - header ครั้งแรก: magic, version, sample rate, channels, format → ตามด้วย PCM ล้วน
