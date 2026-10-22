@@ -73,17 +73,28 @@ final class MicServer: ObservableObject {
     }
 
     private let lowCut = Biquad()
+    private let mud = Biquad()
     private let presence = Biquad()
+    private let highCut = Biquad()
+    private let comp = Compressor()
     private let reverb = Reverb()
-    func setEQ(on: Bool, lowCutHz: Double, presenceDB: Double) {
-        lowCut.setHighPass(freq: lowCutHz)
-        presence.setPeaking(freq: 4000, gainDB: presenceDB)
-        lowCut.enabled = on
-        presence.enabled = on
-    }
-    func setReverb(preset: Int, mix: Double) {
-        reverb.mix = Float(mix)
-        reverb.preset = Reverb.Preset(rawValue: preset) ?? .off
+    /// ค่าตามแหล่งเสียง (EQ, compressor, reverb, release ของ limiter) ดู Tones.swift
+    func setTone(_ t: Tone, eqOn: Bool) {
+        lowCut.setHighPass(freq: t.lowCutHz)
+        mud.setPeaking(freq: 300, gainDB: t.mudDB, q: 1.2)
+        presence.setPeaking(freq: t.presenceHz, gainDB: t.presenceDB)
+        highCut.setLowPass(freq: min(t.highCutHz, 20000))
+        lowCut.enabled = eqOn
+        mud.enabled = eqOn
+        presence.enabled = eqOn
+        highCut.enabled = eqOn && t.highCutHz < 20000
+        comp.set(thresholdDB: t.compThresholdDB, ratio: t.compRatio,
+                 attackMs: t.compAttackMs, releaseMs: t.compReleaseMs)
+        comp.enabled = t.compOn
+        reverb.mix = Float(t.reverbMix)
+        reverb.preDelay = Int(t.preDelayMs * 48)
+        reverb.preset = Reverb.Preset(rawValue: t.reverbPreset) ?? .off
+        limiter.setRelease(ms: t.limiterReleaseMs)
     }
 
     // พอร์ต 7779: บอกตัวรับว่าปุ่ม "ฟังเสียงตัวเอง" เปิดไหม (1 byte 0/1) แยกจากพอร์ตเสียงเพื่อไม่แตะ protocol เดิม
@@ -285,10 +296,11 @@ final class MicServer: ObservableObject {
         var out = [Float](repeating: 0, count: n)
         var peak: Float = 0
         var clipped = false
-        // ลำดับ: ตัดเสียงรบกวน → gain → EQ → reverb → limiter (ดู docs/plans/phase4.md)
+        // ลำดับ: ตัดเสียงรบกวน → gain → EQ → compressor → reverb → limiter (docs/AUDIO_RESEARCH.md)
         // ป้อน limiter ทุก sample แม้ปิดไมค์ เพื่อให้ดีเลย์คงที่ ตัด ±1 ซ้ำเป็นตัวกันสุดท้าย
         for i in 0..<n {
-            var x = reverb.process(presence.process(lowCut.process(noise.process(ch[i]) * g)))
+            let eq = highCut.process(presence.process(mud.process(lowCut.process(noise.process(ch[i]) * g))))
+            var x = reverb.process(comp.process(eq))
             if m { x = 0 }                    // ปิดหลัง reverb ให้เงียบทันที ไม่มีหางเสียงค้าง
             if abs(x) > 1 { clipped = true }
             let v = max(-1, min(1, limiter.process(x)))

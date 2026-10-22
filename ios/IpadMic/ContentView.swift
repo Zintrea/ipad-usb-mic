@@ -2,18 +2,14 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var server: MicServer
+    @ObservedObject var tones: Tones
     @AppStorage("micMode") private var micMode = 0   // จำค่าข้ามการเปิดแอป
     @AppStorage("gainDB") private var gainDB = 0.0
     @AppStorage("muted") private var muted = false
     @AppStorage("limiterOn") private var limiterOn = true
     @AppStorage("ceilingDB") private var ceilingDB = -1.0
     @AppStorage("eqOn") private var eqOn = true
-    @AppStorage("lowCutHz") private var lowCutHz = 100.0
-    @AppStorage("presenceDB") private var presenceDB = 3.0
-    @AppStorage("reverbPreset") private var reverbPreset = 0
-    @AppStorage("reverbMix") private var reverbMix = 0.2
     @AppStorage("noiseOn") private var noiseOn = true
-    @AppStorage("noiseDepthDB") private var noiseDepthDB = 20.0
     @AppStorage("noiseFFT") private var noiseFFT = 4096
     @AppStorage("noiseLearnSec") private var noiseLearnSec = 30.0
     @AppStorage("noiseSens") private var noiseSens = 2.0
@@ -21,22 +17,30 @@ struct ContentView: View {
     @State private var monitor = false   // ไม่จำค่า: เปิดแอปใหม่ปิดเสมอ กันเสียงหอนถ้าลืมถอดหูฟังแล้วเปิดลำโพง
 
     private var noiseHint: String {
-        if micMode == 2 { return "โหมด Apple ตัดเสียงรบกวนให้แล้ว ตัวนี้จึงปิดไว้ (เปลี่ยนโหมดในตั้งค่า)" }
+        if micMode == 2 { return "ตัดเสียงรบกวน: ใช้ของ Apple (เปลี่ยนโหมดในตั้งค่า)" }
+        if !noiseOn { return "ตัดเสียงรบกวน: ปิดอยู่ (เปิดในตั้งค่า)" }
         if server.noiseLearning {
             return String(format: "กำลังเรียนเสียงรอบข้าง %.0f วินาที: ไม่พูดไม่ร้อง ขยับตัว/หายใจ/ลากเก้าอี้ได้ตามปกติ", noiseLearnSec)
         }
-        if !server.hasNoiseProfile { return "ยังไม่ได้เรียนเสียง: กด START แล้วกดเรียนเสียงตอนเงียบ" }
-        return running ? " " : "กด START ก่อนจึงเรียนเสียงใหม่ได้"
+        if !server.hasNoiseProfile { return "ยังไม่ได้เรียนเสียงรอบข้าง: กด START แล้วไปกดเรียนเสียงในตั้งค่า" }
+        return "ตัดเสียงรบกวน: เรียนเสียงรอบข้างแล้ว"
+    }
+
+    // ดีเลย์ที่เกิดใน iPad: ก้อนเสียงจากไมค์ + ตัวตัดเสียงรบกวน (เท่าขนาด FFT) + limiter 1 ms
+    private var delayText: String {
+        guard running else { return " " }
+        let nr = noiseOn && micMode != 2 && server.hasNoiseProfile ? Double(noiseFFT) / 48 : 0
+        return String(format: "เสียงช้ากว่าจริงประมาณ %.0f มิลลิวินาที (เฉพาะใน iPad ยังไม่รวมสายและคอม)",
+                      server.chunkMs + nr + 1)
     }
 
     // ส่งค่าเสียงทั้งหมดให้ server (ค่าถูกจำใน AppStorage ทั้งหน้านี้และหน้าตั้งค่า)
     private func applyAudio() {
         server.setGain(db: gainDB); server.setMuted(muted)
         server.setLimiter(on: limiterOn, ceilingDB: ceilingDB)
-        server.setEQ(on: eqOn, lowCutHz: lowCutHz, presenceDB: presenceDB)
-        server.setReverb(preset: reverbPreset, mix: reverbMix)
+        server.setTone(tones.current, eqOn: eqOn)
         server.setNoise(on: noiseOn && micMode != 2,   // โหมด Apple ตัดเสียงให้แล้ว ตัดซ้ำจะทึบ
-                         depthDB: noiseDepthDB, sensitivity: noiseSens)
+                         depthDB: tones.current.noiseDepthDB, sensitivity: noiseSens)
         server.setMonitor(monitor)
     }
 
@@ -92,6 +96,9 @@ struct ContentView: View {
                 Text(statusText).font(.title2)
             }
 
+            Text("แหล่งเสียง: " + Source.names[tones.source])
+                .font(.headline)
+
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule().fill(.quaternary)
@@ -107,28 +114,14 @@ struct ContentView: View {
             }
             .frame(maxWidth: 360)
 
-            Picker("เสียงก้อง", selection: $reverbPreset) {
-                Text("ไม่ก้อง").tag(0)
-                Text("ห้อง").tag(1)
-                Text("ฮอลล์").tag(2)
-            }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 360)
-
-            VStack(spacing: 8) {
-                HStack {
-                    Toggle("ตัดเสียงรบกวน", isOn: $noiseOn)
-                        .disabled(micMode == 2)
-                    Button("เรียนเสียงรอบข้าง") { server.learnNoise(seconds: noiseLearnSec) }
-                        .buttonStyle(.bordered)
-                        .disabled(!running || server.noiseLearning || micMode == 2)
-                }
-                Text(noiseHint).font(.footnote).foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: 360)
-
-            Toggle("ฟังเสียงตัวเองที่คอม (หูฟังเท่านั้น)", isOn: $monitor)
+            Text(noiseHint).font(.footnote).foregroundStyle(.secondary)
                 .frame(maxWidth: 360)
+
+            VStack(spacing: 4) {
+                Toggle("ฟังเสียงตัวเองที่คอม (หูฟังเท่านั้น)", isOn: $monitor)
+                Text(delayText).font(.footnote).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: 360)
 
             Button {
                 muted.toggle()
@@ -149,26 +142,19 @@ struct ContentView: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(running ? .red : .blue)
-
-            Text(running ? String(format: "ก้อนละ %.1f ms", server.chunkMs) : " ")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
         }
         .padding()
-        .sheet(isPresented: $showSettings) { SettingsView(running: running) }
+        .sheet(isPresented: $showSettings) { SettingsView(server: server, tones: tones, running: running) }
         .onAppear { applyAudio() }
         .onChange(of: gainDB) { applyAudio() }
         .onChange(of: muted) { applyAudio() }
         .onChange(of: limiterOn) { applyAudio() }
         .onChange(of: ceilingDB) { applyAudio() }
         .onChange(of: eqOn) { applyAudio() }
-        .onChange(of: lowCutHz) { applyAudio() }
-        .onChange(of: presenceDB) { applyAudio() }
-        .onChange(of: reverbPreset) { applyAudio() }
-        .onChange(of: reverbMix) { applyAudio() }
+        .onChange(of: tones.source) { applyAudio() }
+        .onChange(of: tones.all) { applyAudio() }
         .onChange(of: noiseOn) { applyAudio() }
         .onChange(of: micMode) { applyAudio() }
-        .onChange(of: noiseDepthDB) { applyAudio() }
         .onChange(of: noiseSens) { applyAudio() }
         .onChange(of: monitor) { applyAudio() }
     }
