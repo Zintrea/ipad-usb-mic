@@ -105,3 +105,5 @@
   - **ไม่ใช้ REA (`rea-agents`):** แอป WO Mic บน iPad เข้ารหัส FairPlay แกะไม่ได้ถ้าไม่ jailbreak, ตัวรับ Windows ไม่บอกค่าไมค์ฝั่ง iPad
   - **สงสัยแต่ยังไม่วัด:** ค่าเริ่มต้นตัดเสียง (ลึก 20 dB, ไว 2) อาจเป็นต้นเหตุเสียงในน้ำ/ทึบ ลองปิดตัดเสียงใน ci10 เทียบได้เลย
   - **ยังไม่ได้ตรวจ:** compile บน CI, ทดสอบบน iPad (voice processing อาจไม่ได้ 48 kHz → แอปขึ้น error, อาจลดเสียงร้องลากยาว)
+- research การปรับเสียง (พูด / ร้อง+กีต้าร์ / violin / ซอด้วง): EQ, dynamics, noise reduction, reverb → [docs/AUDIO_RESEARCH.md](docs/AUDIO_RESEARCH.md) + เพิ่ม `CLAUDE.md` ชี้ไฟล์อ้างอิง
+  - **ยังไม่ได้ตรวจ:** ไม่พบงานวัดสเปกตรัมซอด้วง (อนุมานจาก erhu), ตาราง preset ต้องอัดเทียบบน iPad จริง
